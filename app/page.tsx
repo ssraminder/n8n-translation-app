@@ -77,10 +77,15 @@ export default function QuoteFlowPage() {
               setFiles(combined)
             }} />
             <UploadedFilesList files={files} onRemove={(idx)=> setFiles(files.filter((_,i)=>i!==idx))} />
-            {files.length > 0 && <LanguageSelects value={langs} onChange={setLangs} />}
-            {files.length === 0 && (
-              <p className="mt-6 text-sm text-gray-600 text-center">Upload at least one file to choose Source Language, Target Language, Intended Use, and Country of Issue.</p>
-            )}
+            <details open={files.length > 0} className="mt-6 bg-white rounded-lg shadow-sm border">
+              <summary className="cursor-pointer list-none select-none px-4 py-3 flex items-center justify-between">
+                <span className="font-medium text-gray-900">Languages & Intended Use</span>
+                <span className="text-xs text-gray-500">{files.length === 0 ? 'Upload a file to expand' : 'Ready'}</span>
+              </summary>
+              <div className="p-4 border-t">
+                <LanguageSelects value={langs} onChange={setLangs} />
+              </div>
+            </details>
             <button onClick={()=> setStep(2)} className="mt-8 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors">Get Instant Quote</button>
           </div>
         )}
