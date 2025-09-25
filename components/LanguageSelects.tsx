@@ -77,8 +77,8 @@ export function LanguageSelects({ value, onChange }: { value: LanguageState; onC
         onChange={(v) => {
           const selected = languages.find((o) => String(o.value) === v)?.label || ''
           const next: LanguageState = { ...value, source: selected }
-          if (!sourceIsEnglish) {
-            // Reset target when changing away from English to ensure valid options
+          const isEnglishNext = selected.toLowerCase() === 'english'
+          if (!isEnglishNext) {
             next.target = ''
             next.targetOther = ''
           }
