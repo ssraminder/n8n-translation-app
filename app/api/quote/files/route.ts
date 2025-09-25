@@ -7,7 +7,10 @@ export async function POST(req: NextRequest) {
   if (!quote_id || !Array.isArray(files) || files.length === 0) {
     return NextResponse.json({ error: 'INVALID' }, { status: 400 })
   }
-  const supabase = createClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_ANON_KEY as string)
+  const supabaseUrl = process.env.SUPABASE_URL as string
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string | undefined
+  const anonKey = process.env.SUPABASE_ANON_KEY as string
+  const supabase = createClient(supabaseUrl, serviceKey || anonKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
   // Create signed URLs for each uploaded file and insert DB rows
   const rows: { quote_id: string; filename: string | null; storage_path: string; signed_url: string | null; bytes: number | null; content_type: string | null }[] = []
