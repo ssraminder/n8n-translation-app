@@ -147,7 +147,7 @@ export default function QuoteFlowPage() {
                 <LanguageSelects value={langs} onChange={setLangs} />
               </div>
             </details>
-            <button onClick={()=> setStep(2)} className="mt-8 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors">Get Instant Quote</button>
+            <button onClick={startQuote} className="mt-8 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors">Get Instant Quote</button>
           </div>
         )}
 
