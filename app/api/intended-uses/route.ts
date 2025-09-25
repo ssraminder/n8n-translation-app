@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseClient } from '@/src/lib/supabase'
+import { supabaseClient } from '@/src/lib/supabase.ts'
 
 export async function GET() {
   const { data, error } = await supabaseClient.from('intended_uses').select('id,name').order('name', { ascending: true })
