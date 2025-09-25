@@ -1,5 +1,6 @@
 "use client"
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ProgressBar, StepIndex } from '@/components/ProgressBar'
 import { FileUploadArea } from '@/components/FileUploadArea'
 import { UploadedFilesList } from '@/components/UploadedFilesList'
@@ -15,9 +16,10 @@ import { ConfirmationPage } from '@/components/ConfirmationPage'
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx'
 
 export default function QuoteFlowPage() {
+  const router = useRouter()
   const [step, setStep] = useState<StepIndex>(1)
   const [files, setFiles] = useState<File[]>([])
-  const [langs, setLangs] = useState<LanguageState>({ source: 'Auto-detected: English', target: 'Spanish', purpose: 'Immigration (IRCC)' })
+  const [langs, setLangs] = useState<LanguageState>({ source: '', target: '', purpose: '', country: '', targetOther: '' })
   const [details, setDetails] = useState<ClientDetails>({ fullName: '', email: '', phone: '', orderType: 'personal' })
   const [otpOpen, setOtpOpen] = useState(false)
   const [processingOpen, setProcessingOpen] = useState(false)
@@ -27,7 +29,7 @@ export default function QuoteFlowPage() {
     quoteId: '#TQ-2024-001234',
     documents: (files.length ? files.map(f=>f.name) : ['passport.pdf','diploma.pdf']),
     pages: Math.max(1, files.length) === 1 ? 1 : 3,
-    languages: `${langs.source.split(':').pop()?.trim() || langs.source} → ${langs.target}`,
+    languages: `${(langs.source || '').trim()} → ${langs.target === 'Other' ? (langs.targetOther || 'Other') : langs.target}`,
     purpose: langs.purpose,
   }), [files, langs])
 
@@ -47,19 +49,58 @@ export default function QuoteFlowPage() {
     const total = subtotal + rushFee + deliveryFee + tax
     return {
       sourceLanguage: langs.source.replace('Auto-detected: ', ''),
-      targetLanguage: langs.target,
+      targetLanguage: langs.target === 'Other' ? (langs.targetOther || 'Other') : langs.target,
       documentTypes: quote.documents.map(n=>n.split('.').pop()?.toUpperCase()).join(', '),
       pages: quote.pages,
       subtotal, rushFee, deliveryFee, tax, total,
     }
   }, [order, langs, quote])
 
-  function startOtpFlow() {
-    setOtpOpen(true)
+  async function signAndUpload(quote_id: string, file: File) {
+    const signRes = await fetch('/api/upload/sign', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ quote_id, filename: file.name, contentType: file.type || 'application/octet-stream' })
+    })
+    if (!signRes.ok) throw new Error('SIGN_FAILED')
+    const { url, headers, path } = await signRes.json()
+    const put = await fetch(url, { method: 'PUT', headers: headers || { 'Content-Type': file.type || 'application/octet-stream' }, body: file })
+    if (!put.ok) throw new Error('UPLOAD_FAILED')
+    return { path, contentType: file.type || 'application/octet-stream' }
   }
-  function verifyOtp() {
-    setOtpOpen(false)
+
+  async function runQuoteFlow() {
+    if (files.length === 0) { setStep(1); return }
+    if (!details.fullName || !details.email) { alert('Please enter your name and email'); return }
     setProcessingOpen(true)
+    try {
+      const createRes = await fetch('/api/quote/create', { method: 'POST' })
+      if (!createRes.ok) throw new Error('CREATE_FAILED')
+      const { quote_id } = await createRes.json()
+      const uploaded = [] as { path: string; contentType: string }[]
+      for (const f of files) {
+        const u = await signAndUpload(quote_id, f)
+        uploaded.push(u)
+      }
+      const submitRes = await fetch('/api/quote/submit', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ client_name: details.fullName, client_email: details.email, quote_id, files: uploaded })
+      })
+      if (!submitRes.ok) throw new Error('SUBMIT_FAILED')
+      const start = Date.now()
+      while (Date.now() - start < 45000) {
+        await new Promise(r => setTimeout(r, 2000))
+        const st = await fetch(`/api/quote/status/${quote_id}`)
+        if (st.ok) {
+          const { stage } = await st.json()
+          if (stage && (stage === 'ready' || stage === 'calculated')) break
+        }
+      }
+      router.push(`/quote/${quote_id}`)
+    } catch (e) {
+      console.error(e)
+      setProcessingOpen(false)
+      alert('There was a problem creating your quote. Please try again.')
+    }
   }
 
   return (
@@ -77,7 +118,15 @@ export default function QuoteFlowPage() {
               setFiles(combined)
             }} />
             <UploadedFilesList files={files} onRemove={(idx)=> setFiles(files.filter((_,i)=>i!==idx))} />
-            <LanguageSelects value={langs} onChange={setLangs} />
+            <details open={files.length > 0} className="mt-6 bg-white rounded-lg shadow-sm border">
+              <summary className="cursor-pointer list-none select-none px-4 py-3 flex items-center justify-between">
+                <span className="font-medium text-gray-900">Languages & Intended Use</span>
+                <span className="text-xs text-gray-500">{files.length === 0 ? 'Upload a file to expand' : 'Ready'}</span>
+              </summary>
+              <div className="p-4 border-t">
+                <LanguageSelects value={langs} onChange={setLangs} />
+              </div>
+            </details>
             <button onClick={()=> setStep(2)} className="mt-8 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors">Get Instant Quote</button>
           </div>
         )}
@@ -88,7 +137,7 @@ export default function QuoteFlowPage() {
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Enter Your Details</h2>
               <p className="text-gray-600">We need some basic information to process your quote</p>
             </div>
-            <ClientDetailsForm value={details} onChange={setDetails} onContinue={startOtpFlow} />
+            <ClientDetailsForm value={details} onChange={setDetails} onContinue={runQuoteFlow} />
           </div>
         )}
 
@@ -133,8 +182,8 @@ export default function QuoteFlowPage() {
         </div>
       </div>
 
-      <OtpModal open={otpOpen} onVerify={verifyOtp} onClose={()=> setOtpOpen(false)} onResend={()=>{}} />
-      <ProcessingOverlay open={processingOpen} onDone={()=> { setProcessingOpen(false); setStep(3) }} />
+      <OtpModal open={otpOpen} onVerify={()=>{}} onClose={()=> setOtpOpen(false)} onResend={()=>{}} />
+      <ProcessingOverlay open={processingOpen} onDone={()=> {}} />
     </div>
   )
 }
