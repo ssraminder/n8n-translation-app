@@ -21,7 +21,7 @@ exports.handler = async (event) => {
 
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
-    payment_method_types: ['card', 'apple_pay', 'google_pay'],
+    automatic_payment_methods: { enabled: true },
     customer_email: q?.client_email || undefined,
     line_items: [{ price_data: { currency: (qr?.currency || 'CAD').toLowerCase(), product_data: { name: 'Translation Order' }, unit_amount: amount }, quantity: 1 }],
     success_url: `${env.BASE_URL}/receipt/${quote_id}`,
