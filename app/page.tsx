@@ -23,6 +23,7 @@ export default function QuoteFlowPage() {
   const [details, setDetails] = useState<ClientDetails>({ fullName: '', email: '', phone: '', orderType: 'personal' })
   const [otpOpen, setOtpOpen] = useState(false)
   const [processingOpen, setProcessingOpen] = useState(false)
+  const [quoteId, setQuoteId] = useState<string | null>(null)
 
   const quote: QuoteDetails = useMemo(()=> ({
     price: 89.95,
