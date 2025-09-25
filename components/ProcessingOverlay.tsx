@@ -9,11 +9,11 @@ const STEPS = [
   { id: 'finalizing', label: 'Finalizing quote details...', duration: 2000 },
 ]
 
-export function ProcessingOverlay({ open, onDone }: { open: boolean; onDone: () => void }) {
+export function ProcessingOverlay({ open, onDone, mode = 'process' }: { open: boolean; onDone: () => void; mode?: 'upload' | 'process' }) {
   const [current, setCurrent] = useState(0)
   const [progress, setProgress] = useState(0)
   const timer = useRef<any>(null)
-  useLucide([open, current])
+  useLucide([open, current, mode])
 
   useEffect(()=>{
     if (!open) return
@@ -22,19 +22,25 @@ export function ProcessingOverlay({ open, onDone }: { open: boolean; onDone: () 
     runStep(0, 0)
     return () => { if (timer.current) clearTimeout(timer.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [open, mode])
 
+  const UPLOAD_STEPS = [
+    { id: 'uploading', label: 'Uploading file(s)...', duration: 2000 },
+    { id: 'saving', label: 'Saving file information...', duration: 1500 },
+  ]
+  const PROCESS_STEPS = STEPS
   function runStep(index: number, acc: number) {
     if (!open) return
-    if (index >= STEPS.length) {
+    const active = mode === 'upload' ? UPLOAD_STEPS : PROCESS_STEPS
+    if (index >= active.length) {
       setProgress(100)
       timer.current = setTimeout(()=> onDone(), 800)
       return
     }
     setCurrent(index)
-    const inc = Math.round(100 / STEPS.length)
+    const inc = Math.round(100 / active.length)
     setProgress(acc + inc)
-    timer.current = setTimeout(()=> runStep(index+1, acc+inc), STEPS[index].duration)
+    timer.current = setTimeout(()=> runStep(index+1, acc+inc), active[index].duration)
   }
 
   return (
@@ -47,7 +53,7 @@ export function ProcessingOverlay({ open, onDone }: { open: boolean; onDone: () 
           </div>
         </div>
         <div className="space-y-4">
-          {STEPS.map((s, i)=> (
+          {(mode === 'upload' ? UPLOAD_STEPS : PROCESS_STEPS).map((s, i)=> (
             <div key={s.id} className={'flex items-center justify-center space-x-3 ' + (i <= current ? '' : 'opacity-50')}>
               <div className={i <= current ? 'w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center' : 'w-6 h-6 border-2 border-gray-300 rounded-full flex items-center justify-center'}>
                 {i < current ? (<i data-lucide="check" className="w-4 h-4 text-white"></i>) : (<div className={i === current ? 'w-2 h-2 bg-blue-600 rounded-full animate-pulse' : 'w-2 h-2 bg-gray-300 rounded-full'}></div>)}

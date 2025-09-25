@@ -23,6 +23,7 @@ export default function QuoteFlowPage() {
   const [details, setDetails] = useState<ClientDetails>({ fullName: '', email: '', phone: '', orderType: 'personal' })
   const [otpOpen, setOtpOpen] = useState(false)
   const [processingOpen, setProcessingOpen] = useState(false)
+  const [overlayMode, setOverlayMode] = useState<'upload' | 'process'>('process')
   const [quoteId, setQuoteId] = useState<string | null>(null)
 
   const quote: QuoteDetails = useMemo(()=> ({
@@ -71,6 +72,7 @@ export default function QuoteFlowPage() {
 
   async function startQuote() {
     if (files.length === 0) { alert('Please upload at least one file.'); return }
+    setOverlayMode('upload')
     setProcessingOpen(true)
     try {
       const createRes = await fetch('/api/quote/create', { method: 'POST' })
@@ -99,6 +101,7 @@ export default function QuoteFlowPage() {
   async function runQuoteFlow() {
     if (!quoteId) { alert('Please start by uploading files in Step 1.'); setStep(1); return }
     if (!details.fullName || !details.email) { alert('Please enter your name and email'); return }
+    setOverlayMode('process')
     setProcessingOpen(true)
     try {
       const submitRes = await fetch('/api/quote/update-client', {
@@ -203,7 +206,7 @@ export default function QuoteFlowPage() {
       </div>
 
       <OtpModal open={otpOpen} onVerify={()=>{}} onClose={()=> setOtpOpen(false)} onResend={()=>{}} />
-      <ProcessingOverlay open={processingOpen} onDone={()=> {}} />
+      <ProcessingOverlay open={processingOpen} mode={overlayMode} onDone={()=> {}} />
     </div>
   )
 }

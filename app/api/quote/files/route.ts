@@ -40,7 +40,23 @@ export async function POST(req: NextRequest) {
 
   const env = getEnv()
   if (env.N8N_WEBHOOK_URL) {
-    fetch(env.N8N_WEBHOOK_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quote_id, event: 'files_uploaded' }) }).catch(()=>{})
+    try {
+      const form = new FormData()
+      form.append('quote_id', quote_id)
+      form.append('event', 'files_uploaded')
+      for (const r of rows) {
+        const { data: blob, error: dlErr } = await supabase.storage.from('orders').download(r.storage_path)
+        if (dlErr || !blob) continue
+        const filename = r.filename || r.storage_path.split('/').pop() || 'upload.bin'
+        // Ensure a Blob with correct type
+        const ab = await blob.arrayBuffer()
+        const typed = new Blob([ab], { type: r.content_type || 'application/octet-stream' })
+        form.append('files', typed, filename)
+      }
+      await fetch(env.N8N_WEBHOOK_URL, { method: 'POST', body: form })
+    } catch (_) {
+      // Non-blocking failure
+    }
   }
 
   return NextResponse.json({ ok: true })
