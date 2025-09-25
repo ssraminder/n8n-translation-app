@@ -68,12 +68,23 @@ exports.handler = async (event) => {
     }
 
     const env = getEnv();
-    // Notify n8n for OCR/LLM/pricing flow
-    await fetch(env.N8N_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ quote_id: quote.quote_id })
-    }).catch(() => {});
+    // Notify n8n for OCR/LLM/pricing flow with binary files
+    try {
+      const form = new FormData();
+      form.append('quote_id', quote.quote_id);
+      form.append('event', 'files_uploaded');
+      if (Array.isArray(files) && files.length) {
+        for (const f of files) {
+          const { data: blob, error: dlErr } = await supabaseAdmin.storage.from('orders').download(f.storage_path);
+          if (dlErr || !blob) continue;
+          const ab = await blob.arrayBuffer();
+          const typed = new Blob([ab], { type: f.content_type || 'application/octet-stream' });
+          const filename = f.filename || (f.storage_path?.split('/').pop() || 'upload.bin');
+          form.append('files', typed, filename);
+        }
+      }
+      await fetch(env.N8N_WEBHOOK_URL, { method: 'POST', body: form });
+    } catch (_) {}
 
     return ok({ ok: true }, event.headers.origin);
   } catch (e) {
