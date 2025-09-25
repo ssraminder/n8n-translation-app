@@ -4,7 +4,10 @@ export async function POST() {
   const url = process.env.SUPABASE_URL as string
   const anon = process.env.SUPABASE_ANON_KEY as string
   const client = createClient(url, anon)
-  const { data, error } = await client.from('quote_submissions').insert({}).select('quote_id').single()
+  const quote_id = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) as string
+  const { error } = await client
+    .from('quote_submissions')
+    .insert({ quote_id, name: '', email: '' })
   if (error) return NextResponse.json({ error: 'DB_ERROR', details: error.message }, { status: 500 })
-  return NextResponse.json({ quote_id: (data as any).quote_id })
+  return NextResponse.json({ quote_id })
 }
