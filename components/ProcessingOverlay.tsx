@@ -38,7 +38,6 @@ export function ProcessingOverlay({ open, onDone, mode = 'process' }: { open: bo
       return
     }
     setCurrent(index)
-    const active = mode === 'upload' ? UPLOAD_STEPS : PROCESS_STEPS
     const inc = Math.round(100 / active.length)
     setProgress(acc + inc)
     timer.current = setTimeout(()=> runStep(index+1, acc+inc), active[index].duration)
