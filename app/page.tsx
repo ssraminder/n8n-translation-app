@@ -69,38 +69,57 @@ export default function QuoteFlowPage() {
     return { path, contentType: file.type || 'application/octet-stream', filename: file.name, bytes: file.size }
   }
 
-  async function runQuoteFlow() {
-    if (files.length === 0) { setStep(1); return }
-    if (!details.fullName || !details.email) { alert('Please enter your name and email'); return }
+  async function startQuote() {
+    if (files.length === 0) { alert('Please upload at least one file.'); return }
     setProcessingOpen(true)
     try {
       const createRes = await fetch('/api/quote/create', { method: 'POST' })
       if (!createRes.ok) throw new Error('CREATE_FAILED')
       const { quote_id } = await createRes.json()
-      const uploaded = [] as { path: string; contentType: string }[]
+      const uploaded: { path: string; contentType: string; filename: string; bytes: number }[] = []
       for (const f of files) {
         const u = await signAndUpload(quote_id, f)
         uploaded.push(u)
       }
-      const submitRes = await fetch('/api/quote/submit', {
+      const filesRes = await fetch('/api/quote/files', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ client_name: details.fullName, client_email: details.email, quote_id, files: uploaded })
+        body: JSON.stringify({ quote_id, files: uploaded })
       })
-      if (!submitRes.ok) throw new Error('SUBMIT_FAILED')
+      if (!filesRes.ok) throw new Error('FILES_SAVE_FAILED')
+      setQuoteId(quote_id)
+      setProcessingOpen(false)
+      setStep(2)
+    } catch (e) {
+      console.error(e)
+      setProcessingOpen(false)
+      alert('There was a problem uploading your files. Please try again.')
+    }
+  }
+
+  async function runQuoteFlow() {
+    if (!quoteId) { alert('Please start by uploading files in Step 1.'); setStep(1); return }
+    if (!details.fullName || !details.email) { alert('Please enter your name and email'); return }
+    setProcessingOpen(true)
+    try {
+      const submitRes = await fetch('/api/quote/update-client', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ quote_id: quoteId, client_name: details.fullName, client_email: details.email })
+      })
+      if (!submitRes.ok) throw new Error('UPDATE_CLIENT_FAILED')
       const start = Date.now()
       while (Date.now() - start < 45000) {
         await new Promise(r => setTimeout(r, 2000))
-        const st = await fetch(`/api/quote/status/${quote_id}`)
+        const st = await fetch(`/api/quote/status/${quoteId}`)
         if (st.ok) {
           const { stage } = await st.json()
           if (stage && (stage === 'ready' || stage === 'calculated')) break
         }
       }
-      router.push(`/quote/${quote_id}`)
+      router.push(`/quote/${quoteId}`)
     } catch (e) {
       console.error(e)
       setProcessingOpen(false)
-      alert('There was a problem creating your quote. Please try again.')
+      alert('There was a problem processing your quote. Please try again.')
     }
   }
 
