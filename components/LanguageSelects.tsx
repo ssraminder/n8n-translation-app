@@ -29,10 +29,10 @@ export function LanguageSelects({ value, onChange }: { value: LanguageState; onC
     async function load() {
       try {
         setLoading(true)
-        const [{ languages }, { intended_uses }] = await Promise.all([
-          fetchJSON<{ languages: { id: number; name: string }[] }('/api/languages'),
-          fetchJSON<{ intended_uses: { id: number; name: string }[] }('/api/intended-uses'),
-        ])
+        const langRes = await fetchJSON('/api/languages') as { languages: { id: number; name: string }[] }
+        const usesRes = await fetchJSON('/api/intended-uses') as { intended_uses: { id: number; name: string }[] }
+        const languages = langRes.languages
+        const intended_uses = usesRes.intended_uses
         if (!mounted) return
         setLanguages(languages.map((l) => ({ value: String(l.id), label: l.name })))
         setUses(intended_uses.map((u) => ({ value: String(u.id), label: u.name })))
