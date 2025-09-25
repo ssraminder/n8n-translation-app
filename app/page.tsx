@@ -17,7 +17,7 @@ const ACCEPT = '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx'
 export default function QuoteFlowPage() {
   const [step, setStep] = useState<StepIndex>(1)
   const [files, setFiles] = useState<File[]>([])
-  const [langs, setLangs] = useState<LanguageState>({ source: 'Auto-detected: English', target: 'Spanish', purpose: 'Immigration (IRCC)' })
+  const [langs, setLangs] = useState<LanguageState>({ source: '', target: '', purpose: '', country: '', targetOther: '' })
   const [details, setDetails] = useState<ClientDetails>({ fullName: '', email: '', phone: '', orderType: 'personal' })
   const [otpOpen, setOtpOpen] = useState(false)
   const [processingOpen, setProcessingOpen] = useState(false)
@@ -27,7 +27,7 @@ export default function QuoteFlowPage() {
     quoteId: '#TQ-2024-001234',
     documents: (files.length ? files.map(f=>f.name) : ['passport.pdf','diploma.pdf']),
     pages: Math.max(1, files.length) === 1 ? 1 : 3,
-    languages: `${langs.source.split(':').pop()?.trim() || langs.source} → ${langs.target}`,
+    languages: `${(langs.source || '').trim()} → ${langs.target === 'Other' ? (langs.targetOther || 'Other') : langs.target}`,
     purpose: langs.purpose,
   }), [files, langs])
 
@@ -47,7 +47,7 @@ export default function QuoteFlowPage() {
     const total = subtotal + rushFee + deliveryFee + tax
     return {
       sourceLanguage: langs.source.replace('Auto-detected: ', ''),
-      targetLanguage: langs.target,
+      targetLanguage: langs.target === 'Other' ? (langs.targetOther || 'Other') : langs.target,
       documentTypes: quote.documents.map(n=>n.split('.').pop()?.toUpperCase()).join(', '),
       pages: quote.pages,
       subtotal, rushFee, deliveryFee, tax, total,
