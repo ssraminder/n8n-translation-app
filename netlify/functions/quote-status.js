@@ -14,10 +14,15 @@ exports.handler = async (event) => {
     .maybeSingle();
   if (error) return bad(500, { error: error.message }, event.headers.origin);
   if (!quote) return bad(404, { error: 'Not found' }, event.headers.origin);
+  const s = (quote.status || '').toLowerCase();
+  const allowed = new Set(['ocr','analysis','pricing','ready','hitl','failed']);
   let stage = 'ocr';
-  if (quote.status === 'ready') stage = 'ready';
-  else if (quote.status === 'hitl') stage = 'hitl';
-  else if (quote.status === 'failed') stage = 'failed';
-  else stage = 'pricing';
+  if (allowed.has(s)) {
+    stage = s;
+  } else if (s === 'submitted' || s === 'pending' || s === '') {
+    stage = 'ocr';
+  } else {
+    stage = 'ocr';
+  }
   return ok({ stage }, event.headers.origin);
 };
