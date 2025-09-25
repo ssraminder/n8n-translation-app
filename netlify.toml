@@ -1,54 +1,6 @@
 [build]
   command = "npm run build"
-  publish = "public"
-  functions = "netlify/functions"
+  publish = ".next"
 
-[[redirects]]
-  from = "/api/quote/create"
-  to = "/.netlify/functions/quote-create"
-  status = 200
-
-[[redirects]]
-  from = "/api/upload/sign"
-  to = "/.netlify/functions/upload-sign"
-  status = 200
-
-[[redirects]]
-  from = "/api/quote/submit"
-  to = "/.netlify/functions/quote-submit"
-  status = 200
-
-[[redirects]]
-  from = "/api/quote/status/:id"
-  to = "/.netlify/functions/quote-status?id=:id"
-  status = 200
-
-[[redirects]]
-  from = "/api/delivery/options"
-  to = "/.netlify/functions/delivery-options"
-  status = 200
-
-[[redirects]]
-  from = "/api/quote/update-delivery"
-  to = "/.netlify/functions/quote-update-delivery"
-  status = 200
-
-[[redirects]]
-  from = "/api/quote/email-link"
-  to = "/.netlify/functions/quote-email-link"
-  status = 200
-
-[[redirects]]
-  from = "/api/quote/request-hitl"
-  to = "/.netlify/functions/quote-request-hitl"
-  status = 200
-
-[[redirects]]
-  from = "/api/checkout/session"
-  to = "/.netlify/functions/checkout-session"
-  status = 200
-
-[[redirects]]
-  from = "/api/webhooks/stripe"
-  to = "/.netlify/functions/webhooks-stripe"
-  status = 200
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
