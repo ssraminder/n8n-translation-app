@@ -66,7 +66,7 @@ export default function QuoteFlowPage() {
     const { url, headers, path } = await signRes.json()
     const put = await fetch(url, { method: 'PUT', headers: headers || { 'Content-Type': file.type || 'application/octet-stream' }, body: file })
     if (!put.ok) throw new Error('UPLOAD_FAILED')
-    return { path, contentType: file.type || 'application/octet-stream' }
+    return { path, contentType: file.type || 'application/octet-stream', filename: file.name, bytes: file.size }
   }
 
   async function runQuoteFlow() {
