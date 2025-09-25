@@ -3,28 +3,31 @@ import { useLucide } from './useLucide'
 
 export type StepIndex = 1 | 2 | 3 | 4 | 5
 
+const STEP_LABELS: Record<StepIndex, string> = {
+  1: 'Upload',
+  2: 'Details',
+  3: 'Quote',
+  4: 'Order & Pay',
+  5: 'Confirmation',
+}
+
 export function ProgressBar({ step }: { step: StepIndex }) {
   useLucide([step])
-  const stepItem = (n: number, label: string, active: boolean) => (
-    <div className="flex items-center">
-      <div className={
-        `w-8 h-8 ${active ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'} rounded-full flex items-center justify-center text-sm font-medium`
-      }>{n}</div>
-      <span className={"ml-2 text-sm font-medium " + (active ? 'text-blue-600' : 'text-gray-500')}>{label}</span>
-    </div>
-  )
+  const clamped = Math.min(5, Math.max(1, step)) as StepIndex
+  const percent = ((clamped - 1) / 4) * 100
+  const label = STEP_LABELS[clamped]
+
   return (
     <div className="bg-white shadow-sm border-b">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2 sm:space-x-4">
-            {stepItem(1, 'Upload', step >= 1)}
-            <div className="w-8 sm:w-16 h-0.5 bg-gray-200"></div>
-            {stepItem(2, 'Details', step >= 2)}
-            <div className="w-8 sm:w-16 h-0.5 bg-gray-200"></div>
-            {stepItem(3, 'Quote', step >= 3)}
-            <div className="w-8 sm:w-16 h-0.5 bg-gray-200"></div>
-            {stepItem(4, 'Order & Pay', step >= 4)}
+        <div className="relative">
+          <div className="h-3 w-full bg-gray-200 rounded-full overflow-hidden" aria-label={`Progress: Step ${clamped} of 5`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}>
+            <div className="h-full bg-blue-600 rounded-full transition-all duration-300" style={{ width: `${percent}%` }} />
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="text-sm font-medium text-gray-700 bg-white/80 px-3 py-0.5 rounded-full">
+              Step {clamped} of 5 — {label}
+            </span>
           </div>
         </div>
       </div>
