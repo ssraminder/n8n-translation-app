@@ -3,9 +3,10 @@ import { createClient } from '@supabase/supabase-js'
 
 export async function PUT(req: NextRequest) {
   const url = new URL(req.url)
-  const path = url.searchParams.get('path')
+  const pathParam = url.searchParams.get('path')
   const type = url.searchParams.get('type') || 'application/octet-stream'
-  if (!path) return NextResponse.json({ error: 'MISSING_PATH' }, { status: 400 })
+  if (!pathParam) return NextResponse.json({ error: 'MISSING_PATH' }, { status: 400 })
+  const storagePath: string = pathParam
   const buf = await req.arrayBuffer()
   const supabaseUrl = process.env.SUPABASE_URL as string
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string | undefined
@@ -13,7 +14,7 @@ export async function PUT(req: NextRequest) {
   const client = createClient(supabaseUrl, serviceKey || anonKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
   async function attemptUpload() {
-    return client.storage.from('orders').upload(path, Buffer.from(buf), { contentType: type, upsert: true })
+    return client.storage.from('orders').upload(storagePath, Buffer.from(buf), { contentType: type, upsert: true })
   }
 
   let { error } = await attemptUpload()
@@ -35,5 +36,5 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'UPLOAD_ERROR', details: error.message }, { status })
     }
   }
-  return NextResponse.json({ ok: true, path })
+  return NextResponse.json({ ok: true, path: storagePath })
 }
