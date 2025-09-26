@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getEnv } from '@/src/lib/env'
 
+function trimName(name: string | null | undefined) {
+  if (!name) return null
+  const trimmed = name.trim()
+  const idx = trimmed.lastIndexOf('.')
+  const ext = idx > -1 ? trimmed.slice(idx) : ''
+  const base = idx > -1 ? trimmed.slice(0, idx) : trimmed
+  const safeBase = base.replace(/[^a-zA-Z0-9 _.-]/g, '_')
+  const maxBaseLen = 80
+  const shortBase = safeBase.length > maxBaseLen ? safeBase.slice(0, maxBaseLen) : safeBase
+  const safeExt = ext.replace(/[^a-zA-Z0-9.]/g, '')
+  const candidate = `${shortBase}${safeExt}`
+  return candidate.length ? candidate : null
+}
+
 export async function POST(req: NextRequest) {
   const { quote_id, files } = await req.json()
   if (!quote_id || !Array.isArray(files) || files.length === 0) {
@@ -23,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
     rows.push({
       quote_id,
-      filename: f.filename || null,
+      filename: trimName(f.filename) ,
       storage_path: path,
       signed_url: signed?.signedUrl || null,
       bytes: typeof f.bytes === 'number' ? f.bytes : null,
@@ -47,8 +61,8 @@ export async function POST(req: NextRequest) {
       for (const r of rows) {
         const { data: blob, error: dlErr } = await supabase.storage.from('orders').download(r.storage_path)
         if (dlErr || !blob) continue
-        const filename = r.filename || r.storage_path.split('/').pop() || 'upload.bin'
-        // Ensure a Blob with correct type
+        const display = r.filename || r.storage_path.split('/').pop() || 'upload.bin'
+        const filename = trimName(display) || 'upload.bin'
         const ab = await blob.arrayBuffer()
         const typed = new Blob([ab], { type: r.content_type || 'application/octet-stream' })
         form.append('files', typed, filename)

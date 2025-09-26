@@ -11,10 +11,29 @@ export async function PUT(req: NextRequest) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string | undefined
   const anonKey = process.env.SUPABASE_ANON_KEY as string
   const client = createClient(supabaseUrl, serviceKey || anonKey, { auth: { persistSession: false, autoRefreshToken: false } })
-  const { error } = await client.storage.from('orders').upload(path, Buffer.from(buf), { contentType: type, upsert: true })
+
+  async function attemptUpload() {
+    return client.storage.from('orders').upload(path, Buffer.from(buf), { contentType: type, upsert: true })
+  }
+
+  let { error } = await attemptUpload()
   if (error) {
-    const status = error.message?.toLowerCase().includes('permission') ? 403 : 500
-    return NextResponse.json({ error: 'UPLOAD_ERROR', details: error.message }, { status })
+    const msg = (error.message || '').toLowerCase()
+    const permission = msg.includes('permission') || msg.includes('unauthorized')
+    const missingBucket = msg.includes('not found') || msg.includes('does not exist') || msg.includes('no such bucket')
+    if (missingBucket && serviceKey) {
+      try {
+        await client.storage.createBucket('orders', { public: false })
+        const retry = await attemptUpload()
+        error = retry.error || null
+      } catch (_) {
+        // fallthrough to error handling
+      }
+    }
+    if (error) {
+      const status = permission ? 403 : 500
+      return NextResponse.json({ error: 'UPLOAD_ERROR', details: error.message }, { status })
+    }
   }
   return NextResponse.json({ ok: true, path })
 }
