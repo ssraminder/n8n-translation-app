@@ -58,6 +58,11 @@ export async function POST(req: NextRequest) {
       const form = new FormData()
       form.append('quote_id', quote_id)
       form.append('event', 'files_uploaded')
+      const names = rows.map(r => {
+        const display = r.filename || r.storage_path.split('/').pop() || 'upload.bin'
+        return trimName(display) || 'upload.bin'
+      })
+      form.append('filenames', JSON.stringify(names))
       for (const r of rows) {
         const { data: blob, error: dlErr } = await supabase.storage.from('orders').download(r.storage_path)
         if (dlErr || !blob) continue
