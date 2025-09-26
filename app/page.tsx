@@ -61,7 +61,7 @@ export default function QuoteFlowPage() {
   async function signAndUpload(quote_id: string, file: File) {
     const signRes = await fetch('/api/upload/sign', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ quote_id, filename: file.name, contentType: file.type || 'application/octet-stream' })
+      body: JSON.stringify({ quote_id, filename: file.name, contentType: file.type || 'application/octet-stream', bytes: file.size })
     })
     if (!signRes.ok) throw new Error('SIGN_FAILED')
     const { url, headers, path } = await signRes.json()
