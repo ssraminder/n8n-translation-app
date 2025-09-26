@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+import { getEnv, ALLOWED_FILE_TYPES, ALLOWED_EXTENSIONS } from '@/src/lib/env'
 
 function sanitizeFilename(name: string) {
   const trimmed = (name || '').trim()
@@ -14,11 +16,34 @@ function sanitizeFilename(name: string) {
 }
 
 export async function POST(req: NextRequest) {
-  const { quote_id, filename, contentType } = await req.json()
-  if (!quote_id || !filename) return NextResponse.json({ error: 'MISSING' }, { status: 400 })
+  const { quote_id, filename, contentType, bytes } = await req.json()
+  if (!quote_id || !filename || !contentType || typeof bytes !== 'number') {
+    return NextResponse.json({ error: 'MISSING' }, { status: 400 })
+  }
+
+  const env = getEnv()
+  const ext = (filename.includes('.') ? `.${filename.split('.').pop()}` : '').toLowerCase()
+  if (!ALLOWED_EXTENSIONS.has(ext) || !ALLOWED_FILE_TYPES.has(contentType)) {
+    return NextResponse.json({ error: 'UNSUPPORTED' }, { status: 400 })
+  }
+  const maxBytes = env.MAX_UPLOAD_MB * 1024 * 1024
+  if (bytes > maxBytes) {
+    return NextResponse.json({ error: 'TOO_LARGE', details: `Max ${env.MAX_UPLOAD_MB} MB` }, { status: 400 })
+  }
+
   const safeName = sanitizeFilename(String(filename))
   const fileId = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) as string
   const path = `orders/${quote_id}/${fileId}-${safeName}`
-  const url = `${process.env.BASE_URL || ''}/api/upload/put?path=${encodeURIComponent(path)}&type=${encodeURIComponent(contentType || 'application/octet-stream')}`
-  return NextResponse.json({ path, url, headers: { 'Content-Type': contentType || 'application/octet-stream' } })
+
+  const supabaseUrl = process.env.SUPABASE_URL as string
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string | undefined
+  const anonKey = process.env.SUPABASE_ANON_KEY as string
+  const supabase = createClient(supabaseUrl, serviceKey || anonKey, { auth: { persistSession: false, autoRefreshToken: false } })
+
+  const { data, error } = await supabase.storage.from('orders').createSignedUploadUrl(path)
+  if (error) {
+    return NextResponse.json({ error: 'SIGN_URL_ERROR', details: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ path, url: data?.signedUrl, headers: { 'x-upsert': 'false', 'content-type': contentType } })
 }
