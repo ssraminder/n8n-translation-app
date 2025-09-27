@@ -70,6 +70,8 @@ export default function QuoteFlowPage() {
     return { path, contentType: file.type || 'application/octet-stream', filename: file.name, bytes: file.size }
   }
 
+  function newId() { return (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) as string }
+
   async function startQuote() {
     if (files.length === 0) { alert('Please upload at least one file.'); return }
     setOverlayMode('upload')
