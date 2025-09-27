@@ -85,11 +85,22 @@ export default function QuoteFlowPage() {
       }
       const filesRes = await fetch('/api/quote/files', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ quote_id, files: uploaded })
+        body: JSON.stringify({
+          quote_id,
+          files: uploaded,
+          source_lang: langs.source_code || '',
+          target_lang: (langs.target === 'Other' ? '' : (langs.target_code || '')),
+          intended_use_id: typeof (langs as any).intended_use_id === 'number' ? (langs as any).intended_use_id : undefined,
+          country_of_issue: (langs as any).country_code || undefined,
+        })
       })
       if (!filesRes.ok) throw new Error('FILES_SAVE_FAILED')
+      const filesJson = await filesRes.json()
       setQuoteId(quote_id)
       setProcessingOpen(false)
+      if (filesJson?.webhook === 'failed') {
+        alert('Your files were saved, but processing was not triggered yet. We will retry shortly.')
+      }
       setStep(2)
     } catch (e) {
       console.error(e)
