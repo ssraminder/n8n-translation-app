@@ -1,4 +1,8 @@
 type Props = { params: { quote_id: string }, searchParams?: { [key: string]: string | string[] | undefined } }
+import { createClient } from '@supabase/supabase-js'
+
+type Props = { params: { quote_id: string }, searchParams?: { [key: string]: string | string[] | undefined } }
+
 export default async function ReceiptPage({ params, searchParams }: Props) {
   const paid = typeof searchParams?.session_id === 'string' && searchParams?.session_id.length! > 0
   const client = createClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_ANON_KEY as string)
