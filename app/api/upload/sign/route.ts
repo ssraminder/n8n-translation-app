@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   const safeName = encodeURIComponent(sanitizeFilename(String(filename)))
   const fileId = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) as string
-  const path = `orders/${quote_id}/${fileId}__${safeName}`
+  const path = `${quote_id}/${fileId}__${safeName}`
 
   const supabaseUrl = process.env.SUPABASE_URL as string
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string | undefined
