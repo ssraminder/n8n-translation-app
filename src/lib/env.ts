@@ -10,6 +10,7 @@ export function getEnv() {
     TWILIO_API_KEY: process.env.TWILIO_API_KEY,
     BASE_URL: process.env.BASE_URL,
     MAX_UPLOAD_MB: Number(process.env.MAX_UPLOAD_MB || 50),
+    SIGNED_URL_TTL_SECS: Number(process.env.SIGNED_URL_TTL_SECS || 1209600),
     TZ: process.env.TZ || 'America/Edmonton',
     SAME_DAY_CUTOFF_LOCAL_TIME: process.env.SAME_DAY_CUTOFF_LOCAL_TIME || '14:00',
     SAME_DAY_CUTOFF_WEEKDAYS: (process.env.SAME_DAY_CUTOFF_WEEKDAYS || '1,2,3,4,5').split(',').map((s)=>parseInt(s.trim(),10)).filter((n)=>!Number.isNaN(n)),
