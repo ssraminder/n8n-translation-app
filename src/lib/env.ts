@@ -9,7 +9,7 @@ export function getEnv() {
     BREVO_API_KEY: process.env.BREVO_API_KEY,
     TWILIO_API_KEY: process.env.TWILIO_API_KEY,
     BASE_URL: process.env.BASE_URL,
-    MAX_UPLOAD_MB: Number(process.env.MAX_UPLOAD_MB || 10),
+    MAX_UPLOAD_MB: Number(process.env.MAX_UPLOAD_MB || 50),
     TZ: process.env.TZ || 'America/Edmonton',
     SAME_DAY_CUTOFF_LOCAL_TIME: process.env.SAME_DAY_CUTOFF_LOCAL_TIME || '14:00',
     SAME_DAY_CUTOFF_WEEKDAYS: (process.env.SAME_DAY_CUTOFF_WEEKDAYS || '1,2,3,4,5').split(',').map((s)=>parseInt(s.trim(),10)).filter((n)=>!Number.isNaN(n)),

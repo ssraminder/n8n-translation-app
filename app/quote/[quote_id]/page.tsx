@@ -5,11 +5,16 @@ type Props = { params: { quote_id: string } }
 export default async function QuotePage({ params }: Props) {
   const client = createClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_ANON_KEY as string)
   const { data: result } = await client.from('quote_results').select('subtotal,tax,total,currency').eq('quote_id', params.quote_id).maybeSingle()
+  const { data: sub } = await client.from('quote_submissions').select('job_id').eq('quote_id', params.quote_id).maybeSingle()
+  const jobId = sub?.job_id || null
 
   return (
     <section className="card-surface w-full max-w-3xl p-6">
       <h2 className="text-xl font-semibold mb-4">Quote</h2>
-      <p className="text-gray-700 mb-6">Quote ID: <code>{params.quote_id}</code></p>
+      {jobId ? (
+        <p className="text-gray-700 mb-1">Job ID: <code>{jobId}</code></p>
+      ) : null}
+      <p className="text-gray-500 mb-6">Quote ID: <code>{params.quote_id}</code></p>
       {result ? (
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Price Breakdown</h3>

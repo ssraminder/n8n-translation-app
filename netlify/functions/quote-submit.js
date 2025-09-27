@@ -1,4 +1,3 @@
-const fetch = global.fetch;
 const { ok, bad, handleOptions } = require('../../src/utils/cors');
 const { supabaseAdmin } = require('../../src/lib/supabase');
 const { getEnv } = require('../../src/lib/env');
@@ -21,6 +20,15 @@ async function getOrCreateCustomer({ name, email, phone }) {
   return data.id;
 }
 
+function jobIdFromQuote(id) {
+  let h = 0 >>> 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  const num = (h % 90000) + 10000;
+  return `CS${num}`;
+}
+
 exports.handler = async (event) => {
   const pre = handleOptions(event);
   if (pre) return pre;
@@ -38,6 +46,7 @@ exports.handler = async (event) => {
     const customer_id = await getOrCreateCustomer({ name: quote.client_name, email: quote.client_email, phone: quote.phone });
     const insertQuote = {
       quote_id: quote.quote_id,
+      job_id: jobIdFromQuote(quote.quote_id),
       customer_id,
       client_name: quote.client_name,
       client_email: quote.client_email,
@@ -54,6 +63,10 @@ exports.handler = async (event) => {
     if (qErr) return bad(400, { error: qErr.message }, event.headers.origin);
 
     if (Array.isArray(files) && files.length) {
+      const env = getEnv();
+      const maxBytes = (env.MAX_UPLOAD_MB || 50) * 1024 * 1024;
+      const totalBytes = files.reduce((acc, f) => acc + Number(f.bytes || 0), 0);
+      if (totalBytes > maxBytes) return bad(400, { error: `Payload too large. Total must be <= ${env.MAX_UPLOAD_MB} MB` }, event.headers.origin);
       const toInsert = files.map(f => ({
         quote_id: quote.quote_id,
         file_id: f.file_id,
@@ -72,7 +85,12 @@ exports.handler = async (event) => {
     try {
       const form = new FormData();
       form.append('quote_id', quote.quote_id);
+      form.append('job_id', jobIdFromQuote(quote.quote_id));
       form.append('event', 'files_uploaded');
+      form.append('source_language', quote.source_lang || '');
+      form.append('target_language', quote.target_lang || '');
+      form.append('intended_use', quote.intended_use || '');
+      form.append('country_of_issue', '');
       if (Array.isArray(files) && files.length) {
         for (const f of files) {
           const { data: blob, error: dlErr } = await supabaseAdmin.storage.from('orders').download(f.storage_path);

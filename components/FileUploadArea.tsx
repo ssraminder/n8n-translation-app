@@ -25,7 +25,7 @@ export function FileUploadArea({ onFilesSelected, accept }: { onFilesSelected: (
       </div>
       <h3 className="text-xl font-semibold text-gray-900 mb-2">Drop your files here or click to browse</h3>
       <p className="text-gray-600 mb-4">Accepted formats: PDF, JPG, PNG, Word, Excel</p>
-      <p className="text-sm text-gray-500">Maximum file size: 10MB per file</p>
+      <p className="text-sm text-gray-500">Maximum file size: 50MB per file; up to 50MB total</p>
       <input ref={inputRef} type="file" className="hidden" multiple accept={accept} onChange={(e)=>{
         const list = e.target.files ? Array.from(e.target.files) : []
         if (list.length) onFilesSelected(list)
