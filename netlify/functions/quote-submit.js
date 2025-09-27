@@ -1,4 +1,3 @@
-const fetch = global.fetch;
 const { ok, bad, handleOptions } = require('../../src/utils/cors');
 const { supabaseAdmin } = require('../../src/lib/supabase');
 const { getEnv } = require('../../src/lib/env');
@@ -19,6 +18,15 @@ async function getOrCreateCustomer({ name, email, phone }) {
     .single();
   if (error) throw error;
   return data.id;
+}
+
+function jobIdFromQuote(id) {
+  let h = 0 >>> 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  const num = (h % 90000) + 10000;
+  return `CS${num}`;
 }
 
 exports.handler = async (event) => {
@@ -72,7 +80,12 @@ exports.handler = async (event) => {
     try {
       const form = new FormData();
       form.append('quote_id', quote.quote_id);
+      form.append('job_id', jobIdFromQuote(quote.quote_id));
       form.append('event', 'files_uploaded');
+      form.append('source_language', quote.source_lang || '');
+      form.append('target_language', quote.target_lang || '');
+      form.append('intended_use', quote.intended_use || '');
+      form.append('country_of_issue', '');
       if (Array.isArray(files) && files.length) {
         for (const f of files) {
           const { data: blob, error: dlErr } = await supabaseAdmin.storage.from('orders').download(f.storage_path);
