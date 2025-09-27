@@ -81,6 +81,7 @@ export default function QuoteFlowPage() {
       if (!createRes.ok) throw new Error('CREATE_FAILED')
       const { quote_id } = await createRes.json()
       const uploaded: { path: string; contentType: string; filename: string; bytes: number }[] = []
+      const idempotency_key = newId()
       for (const f of files) {
         const u = await signAndUpload(quote_id, f)
         uploaded.push(u)
@@ -89,6 +90,7 @@ export default function QuoteFlowPage() {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           quote_id,
+          idempotency_key,
           files: uploaded,
           source_lang: langs.source_code || '',
           target_lang: (langs.target === 'Other' ? '' : (langs.target_code || '')),
