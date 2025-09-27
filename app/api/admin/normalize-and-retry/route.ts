@@ -56,8 +56,16 @@ export async function POST(req: NextRequest) {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ quote_id, job_id })
       })
-      webhook = res.ok ? 'ok' : `http_${res.status}`
+      if (!res.ok) {
+        let txt = ''
+        try { txt = await res.text() } catch (_) {}
+        webhook = `http_${res.status}`
+        console.error('WEBHOOK_FAILED_RETRY', { quote_id, job_id, status: res.status, body: txt?.slice(0, 500) || '' })
+      } else {
+        webhook = 'ok'
+      }
     } catch (e: any) {
+      console.error('WEBHOOK_FAILED_RETRY', { quote_id, job_id, error: e?.message })
       webhook = 'failed'
     }
   }
