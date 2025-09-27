@@ -46,6 +46,7 @@ exports.handler = async (event) => {
     const customer_id = await getOrCreateCustomer({ name: quote.client_name, email: quote.client_email, phone: quote.phone });
     const insertQuote = {
       quote_id: quote.quote_id,
+      job_id: jobIdFromQuote(quote.quote_id),
       customer_id,
       client_name: quote.client_name,
       client_email: quote.client_email,
@@ -62,6 +63,10 @@ exports.handler = async (event) => {
     if (qErr) return bad(400, { error: qErr.message }, event.headers.origin);
 
     if (Array.isArray(files) && files.length) {
+      const env = getEnv();
+      const maxBytes = (env.MAX_UPLOAD_MB || 50) * 1024 * 1024;
+      const totalBytes = files.reduce((acc, f) => acc + Number(f.bytes || 0), 0);
+      if (totalBytes > maxBytes) return bad(400, { error: `Payload too large. Total must be <= ${env.MAX_UPLOAD_MB} MB` }, event.headers.origin);
       const toInsert = files.map(f => ({
         quote_id: quote.quote_id,
         file_id: f.file_id,

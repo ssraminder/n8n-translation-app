@@ -137,7 +137,19 @@ export default function QuoteFlowPage() {
               <p className="text-lg text-gray-600">Upload your documents to get an instant quote</p>
             </div>
             <FileUploadArea accept={ACCEPT} onFilesSelected={(newFiles)=>{
-              const combined = [...files, ...newFiles]
+              const MAX_MB = 50
+              const maxBytes = MAX_MB * 1024 * 1024
+              const validNew = newFiles.filter(f => f.size <= maxBytes)
+              const currentTotal = files.reduce((acc,f)=> acc + f.size, 0)
+              let remaining = Math.max(0, maxBytes - currentTotal)
+              const accepted: File[] = []
+              for (const f of validNew) {
+                if (f.size <= remaining) { accepted.push(f); remaining -= f.size }
+              }
+              if (accepted.length < newFiles.length) {
+                alert(`Maximum total upload size is ${MAX_MB} MB. Some files were not added.`)
+              }
+              const combined = [...files, ...accepted]
               setFiles(combined)
             }} />
             <UploadedFilesList files={files} onRemove={(idx)=> setFiles(files.filter((_,i)=>i!==idx))} />

@@ -35,6 +35,14 @@ export async function POST(req: NextRequest) {
   const anonKey = process.env.SUPABASE_ANON_KEY as string
   const supabase = createClient(supabaseUrl, serviceKey || anonKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
+  // Enforce total payload limit
+  const env = getEnv()
+  const maxBytes = (env.MAX_UPLOAD_MB || 50) * 1024 * 1024
+  const totalBytes = (files as { bytes?: number }[]).reduce((acc, f) => acc + (typeof f.bytes === 'number' ? f.bytes : 0), 0)
+  if (totalBytes > maxBytes) {
+    return NextResponse.json({ error: 'PAYLOAD_TOO_LARGE', details: `Total files must be <= ${env.MAX_UPLOAD_MB} MB` }, { status: 400 })
+  }
+
   // Create signed URLs for each uploaded file and insert DB rows
   const rows: { quote_id: string; filename: string | null; storage_path: string; signed_url: string | null; bytes: number | null; content_type: string | null }[] = []
   for (const f of files as { path: string; contentType?: string; filename?: string; bytes?: number }[]) {
@@ -61,7 +69,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const env = getEnv()
   if (env.N8N_WEBHOOK_URL) {
     try {
       const { data: sub } = await supabase
