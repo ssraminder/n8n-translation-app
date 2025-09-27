@@ -45,7 +45,21 @@ export async function POST(req: NextRequest) {
   if (!serviceKey) return NextResponse.json({ error: 'SERVER_MISCONFIG', details: 'Missing service role key' }, { status: 500 })
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
-  const { data, error } = await supabase.storage.from('orders').createSignedUploadUrl(path)
+  let { data, error } = await supabase.storage.from('orders').createSignedUploadUrl(path)
+  if (error) {
+    const msg = (error.message || '').toLowerCase()
+    const missingBucket = msg.includes('not found') || msg.includes('does not exist') || msg.includes('no such bucket')
+    if (missingBucket) {
+      try {
+        await supabase.storage.createBucket('orders', { public: false })
+        const retry = await supabase.storage.from('orders').createSignedUploadUrl(path)
+        data = retry.data
+        error = retry.error as any
+      } catch (_) {
+        // fallthrough
+      }
+    }
+  }
   if (error) {
     return NextResponse.json({ error: 'SIGN_URL_ERROR', details: error.message }, { status: 500 })
   }
