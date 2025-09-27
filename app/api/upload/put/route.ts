@@ -10,8 +10,8 @@ export async function PUT(req: NextRequest) {
   const buf = await req.arrayBuffer()
   const supabaseUrl = process.env.SUPABASE_URL as string
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string | undefined
-  const anonKey = process.env.SUPABASE_ANON_KEY as string
-  const client = createClient(supabaseUrl, serviceKey || anonKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  if (!serviceKey) return NextResponse.json({ error: 'SERVER_MISCONFIG', details: 'Missing service role key' }, { status: 500 })
+  const client = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
   async function attemptUpload() {
     return client.storage.from('orders').upload(storagePath, Buffer.from(buf), { contentType: type, upsert: true })
@@ -22,7 +22,7 @@ export async function PUT(req: NextRequest) {
     const msg = (error.message || '').toLowerCase()
     const permission = msg.includes('permission') || msg.includes('unauthorized')
     const missingBucket = msg.includes('not found') || msg.includes('does not exist') || msg.includes('no such bucket')
-    if (missingBucket && serviceKey) {
+    if (missingBucket) {
       try {
         await client.storage.createBucket('orders', { public: false })
         const retry = await attemptUpload()

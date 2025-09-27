@@ -15,11 +15,16 @@ function sanitizeFilename(name: string) {
   return candidate.length ? candidate : 'upload.bin'
 }
 
+function isUuid(v: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
+}
+
 export async function POST(req: NextRequest) {
   const { quote_id, filename, contentType, bytes } = await req.json()
   if (!quote_id || !filename || !contentType || typeof bytes !== 'number') {
     return NextResponse.json({ error: 'MISSING' }, { status: 400 })
   }
+  if (!isUuid(String(quote_id))) return NextResponse.json({ error: 'INVALID_QUOTE_ID' }, { status: 400 })
 
   const env = getEnv()
   const ext = (filename.includes('.') ? `.${filename.split('.').pop()}` : '').toLowerCase()
@@ -31,16 +36,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'TOO_LARGE', details: `Max ${env.MAX_UPLOAD_MB} MB` }, { status: 400 })
   }
 
-  const safeName = sanitizeFilename(String(filename))
+  const safeName = encodeURIComponent(sanitizeFilename(String(filename)))
   const fileId = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) as string
-  const path = `orders/${quote_id}/${fileId}-${safeName}`
+  const path = `orders/${quote_id}/${fileId}__${safeName}`
 
   const supabaseUrl = process.env.SUPABASE_URL as string
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string | undefined
-  const anonKey = process.env.SUPABASE_ANON_KEY as string
-  const supabase = createClient(supabaseUrl, serviceKey || anonKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  if (!serviceKey) return NextResponse.json({ error: 'SERVER_MISCONFIG', details: 'Missing service role key' }, { status: 500 })
+  const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
-  const { data, error } = await supabase.storage.from('orders').createSignedUploadUrl(path)
+  let { data, error } = await supabase.storage.from('orders').createSignedUploadUrl(path)
+  if (error) {
+    const msg = (error.message || '').toLowerCase()
+    const missingBucket = msg.includes('not found') || msg.includes('does not exist') || msg.includes('no such bucket')
+    if (missingBucket) {
+      try {
+        await supabase.storage.createBucket('orders', { public: false })
+        const retry = await supabase.storage.from('orders').createSignedUploadUrl(path)
+        data = retry.data
+        error = retry.error as any
+      } catch (_) {
+        // fallthrough
+      }
+    }
+  }
   if (error) {
     return NextResponse.json({ error: 'SIGN_URL_ERROR', details: error.message }, { status: 500 })
   }

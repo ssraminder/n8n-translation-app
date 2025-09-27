@@ -70,6 +70,8 @@ export default function QuoteFlowPage() {
     return { path, contentType: file.type || 'application/octet-stream', filename: file.name, bytes: file.size }
   }
 
+  function newId() { return (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) as string }
+
   async function startQuote() {
     if (files.length === 0) { alert('Please upload at least one file.'); return }
     setOverlayMode('upload')
@@ -79,17 +81,30 @@ export default function QuoteFlowPage() {
       if (!createRes.ok) throw new Error('CREATE_FAILED')
       const { quote_id } = await createRes.json()
       const uploaded: { path: string; contentType: string; filename: string; bytes: number }[] = []
+      const idempotency_key = newId()
       for (const f of files) {
         const u = await signAndUpload(quote_id, f)
         uploaded.push(u)
       }
       const filesRes = await fetch('/api/quote/files', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ quote_id, files: uploaded })
+        body: JSON.stringify({
+          quote_id,
+          idempotency_key,
+          files: uploaded,
+          source_lang: langs.source_code || '',
+          target_lang: (langs.target === 'Other' ? '' : (langs.target_code || '')),
+          intended_use_id: typeof (langs as any).intended_use_id === 'number' ? (langs as any).intended_use_id : undefined,
+          country_of_issue: (langs as any).country_code || undefined,
+        })
       })
       if (!filesRes.ok) throw new Error('FILES_SAVE_FAILED')
+      const filesJson = await filesRes.json()
       setQuoteId(quote_id)
       setProcessingOpen(false)
+      if (filesJson?.webhook === 'failed') {
+        alert('Your files were saved, but processing was not triggered yet. We will retry shortly.')
+      }
       setStep(2)
     } catch (e) {
       console.error(e)
