@@ -18,43 +18,59 @@ function trimName(name: string | null | undefined) {
 
 function jobIdFromQuote(id: string) {
   let h = 0 >>> 0
-  for (let i = 0; i < id.length; i++) {
-    h = (h * 31 + id.charCodeAt(i)) >>> 0
-  }
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
   const num = (h % 90000) + 10000
   return `CS${num}`
 }
 
 export async function POST(req: NextRequest) {
-  const { quote_id, files } = await req.json()
-  if (!quote_id || !Array.isArray(files) || files.length === 0) {
-    return NextResponse.json({ error: 'INVALID' }, { status: 400 })
-  }
+  const payload = await req.json()
+  const { quote_id, files } = payload || {}
+  const source_lang: string | null = payload?.source_lang ?? null
+  const target_lang: string | null = payload?.target_lang ?? null
+  const intended_use_id: number | null = typeof payload?.intended_use_id === 'number' ? payload.intended_use_id : (typeof payload?.intended_use_id === 'string' ? parseInt(payload.intended_use_id, 10) : null)
+  const country_of_issue: string | null = payload?.country_of_issue ?? null
+  if (!quote_id || !Array.isArray(files) || files.length === 0) return NextResponse.json({ error: 'INVALID' }, { status: 400 })
+
   const supabaseUrl = process.env.SUPABASE_URL as string
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string | undefined
   const anonKey = process.env.SUPABASE_ANON_KEY as string
   const supabase = createClient(supabaseUrl, serviceKey || anonKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
-  // Enforce total payload limit
   const env = getEnv()
   const maxBytes = (env.MAX_UPLOAD_MB || 50) * 1024 * 1024
   const totalBytes = (files as { bytes?: number }[]).reduce((acc, f) => acc + (typeof f.bytes === 'number' ? f.bytes : 0), 0)
-  if (totalBytes > maxBytes) {
-    return NextResponse.json({ error: 'PAYLOAD_TOO_LARGE', details: `Total files must be <= ${env.MAX_UPLOAD_MB} MB` }, { status: 400 })
-  }
+  if (totalBytes > maxBytes) return NextResponse.json({ error: 'PAYLOAD_TOO_LARGE', details: `Total files must be <= ${env.MAX_UPLOAD_MB} MB` }, { status: 400 })
 
-  // Create signed URLs for each uploaded file and insert DB rows
-  const rows: { quote_id: string; filename: string | null; storage_path: string; signed_url: string | null; bytes: number | null; content_type: string | null }[] = []
+  const upload_session_id = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) as string
+  const job_id = jobIdFromQuote(quote_id)
+
+  const rows: any[] = []
   for (const f of files as { path: string; contentType?: string; filename?: string; bytes?: number }[]) {
     const path = f.path
     if (!path) continue
     const { data: signed, error: signErr } = await supabase.storage.from('orders').createSignedUrl(path, 60 * 60 * 24 * 7)
-    if (signErr) {
-      return NextResponse.json({ error: 'SIGN_URL_ERROR', details: signErr.message }, { status: 500 })
-    }
+    if (signErr) return NextResponse.json({ error: 'SIGN_URL_ERROR', details: signErr.message }, { status: 500 })
+
+    const file_id = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) as string
+    const filename = trimName(f.filename) || (path.split('/').pop() || 'upload.bin')
+    const storage_key = path
+    const file_url = signed?.signedUrl || null
+
     rows.push({
       quote_id,
-      filename: trimName(f.filename) ,
+      job_id,
+      file_id,
+      filename,
+      storage_key,
+      file_url,
+      source_lang,
+      target_lang,
+      intended_use_id,
+      country_of_issue,
+      status: 'uploaded',
+      upload_session_id,
+      // Back-compat fields
       storage_path: path,
       signed_url: signed?.signedUrl || null,
       bytes: typeof f.bytes === 'number' ? f.bytes : null,
@@ -62,55 +78,24 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  if (rows.length) {
-    const { error: insertErr } = await supabase.from('quote_files').insert(rows)
-    if (insertErr) {
-      return NextResponse.json({ error: 'DB_ERROR_FILES', details: insertErr.message }, { status: 500 })
-    }
-  }
+  if (rows.length === 0) return NextResponse.json({ error: 'NO_VALID_FILES' }, { status: 400 })
 
+  const { error: insertErr } = await supabase.from('quote_files').insert(rows)
+  if (insertErr) return NextResponse.json({ error: 'DB_ERROR_FILES', details: insertErr.message }, { status: 500 })
+
+  let webhook = 'skipped'
   if (env.N8N_WEBHOOK_URL) {
     try {
-      const { data: sub } = await supabase
-        .from('quote_submissions')
-        .select('source_lang,target_lang,intended_use')
-        .eq('quote_id', quote_id)
-        .maybeSingle()
-      const { data: res } = await supabase
-        .from('quote_results')
-        .select('results_json')
-        .eq('quote_id', quote_id)
-        .maybeSingle()
-      const country_of_issue = (res as any)?.results_json?.country_of_issue || ''
-      const job_id = jobIdFromQuote(quote_id)
-
-      const form = new FormData()
-      form.append('quote_id', quote_id)
-      form.append('job_id', job_id)
-      form.append('event', 'files_uploaded')
-      form.append('source_language', (sub as any)?.source_lang || '')
-      form.append('target_language', (sub as any)?.target_lang || '')
-      form.append('intended_use', (sub as any)?.intended_use || '')
-      form.append('country_of_issue', country_of_issue)
-      const names = rows.map(r => {
-        const display = r.filename || r.storage_path.split('/').pop() || 'upload.bin'
-        return trimName(display) || 'upload.bin'
+      await fetch(env.N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ quote_id, job_id }),
       })
-      form.append('filenames', JSON.stringify(names))
-      for (const r of rows) {
-        const { data: blob, error: dlErr } = await supabase.storage.from('orders').download(r.storage_path)
-        if (dlErr || !blob) continue
-        const display = r.filename || r.storage_path.split('/').pop() || 'upload.bin'
-        const filename = trimName(display) || 'upload.bin'
-        const ab = await blob.arrayBuffer()
-        const typed = new Blob([ab], { type: r.content_type || 'application/octet-stream' })
-        form.append('files', typed, filename)
-      }
-      await fetch(env.N8N_WEBHOOK_URL, { method: 'POST', body: form })
+      webhook = 'ok'
     } catch (_) {
-      // Non-blocking failure
+      webhook = 'failed'
     }
   }
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, webhook })
 }
