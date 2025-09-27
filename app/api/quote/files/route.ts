@@ -112,11 +112,28 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // Upsert to avoid duplicates across retries
+  // Upsert to avoid duplicates across retries; if unique index missing, fallback to selective insert
   const { error: upsertErr } = await supabase
     .from('quote_files')
     .upsert(rows, { onConflict: 'quote_id,storage_key', ignoreDuplicates: true })
-  if (upsertErr) return NextResponse.json({ error: 'DB_ERROR_FILES', details: upsertErr.message }, { status: 500 })
+
+  if (upsertErr && /no unique|exclusion constraint/i.test(upsertErr.message || '')) {
+    const keys = rows.map(r => r.storage_key)
+    const { data: existing, error: selErr } = await supabase
+      .from('quote_files')
+      .select('storage_key')
+      .eq('quote_id', quote_id)
+      .in('storage_key', keys)
+    if (selErr) return NextResponse.json({ error: 'DB_ERROR_FILES', details: selErr.message }, { status: 500 })
+    const existingSet = new Set((existing || []).map((r: any) => r.storage_key))
+    const toInsert = rows.filter(r => !existingSet.has(r.storage_key))
+    if (toInsert.length) {
+      const { error: insErr } = await supabase.from('quote_files').insert(toInsert)
+      if (insErr) return NextResponse.json({ error: 'DB_ERROR_FILES', details: insErr.message }, { status: 500 })
+    }
+  } else if (upsertErr) {
+    return NextResponse.json({ error: 'DB_ERROR_FILES', details: upsertErr.message }, { status: 500 })
+  }
 
   // Minimal webhook with correlation IDs; one retry on failure
   let webhook = 'skipped'
