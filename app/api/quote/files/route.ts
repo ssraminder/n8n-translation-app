@@ -16,6 +16,15 @@ function trimName(name: string | null | undefined) {
   return candidate.length ? candidate : null
 }
 
+function jobIdFromQuote(id: string) {
+  let h = 0 >>> 0
+  for (let i = 0; i < id.length; i++) {
+    h = (h * 31 + id.charCodeAt(i)) >>> 0
+  }
+  const num = (h % 90000) + 10000
+  return `CS${num}`
+}
+
 export async function POST(req: NextRequest) {
   const { quote_id, files } = await req.json()
   if (!quote_id || !Array.isArray(files) || files.length === 0) {
@@ -55,9 +64,27 @@ export async function POST(req: NextRequest) {
   const env = getEnv()
   if (env.N8N_WEBHOOK_URL) {
     try {
+      const { data: sub } = await supabase
+        .from('quote_submissions')
+        .select('source_lang,target_lang,intended_use')
+        .eq('quote_id', quote_id)
+        .maybeSingle()
+      const { data: res } = await supabase
+        .from('quote_results')
+        .select('results_json')
+        .eq('quote_id', quote_id)
+        .maybeSingle()
+      const country_of_issue = (res as any)?.results_json?.country_of_issue || ''
+      const job_id = jobIdFromQuote(quote_id)
+
       const form = new FormData()
       form.append('quote_id', quote_id)
+      form.append('job_id', job_id)
       form.append('event', 'files_uploaded')
+      form.append('source_language', (sub as any)?.source_lang || '')
+      form.append('target_language', (sub as any)?.target_lang || '')
+      form.append('intended_use', (sub as any)?.intended_use || '')
+      form.append('country_of_issue', country_of_issue)
       const names = rows.map(r => {
         const display = r.filename || r.storage_path.split('/').pop() || 'upload.bin'
         return trimName(display) || 'upload.bin'
