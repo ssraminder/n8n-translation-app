@@ -141,7 +141,11 @@ export async function POST(req: NextRequest) {
     const body = JSON.stringify({ quote_id, job_id })
     try {
       const res = await fetch(env.N8N_WEBHOOK_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) {
+        let txt = ''
+        try { txt = await res.text() } catch (_) {}
+        throw new Error(`HTTP ${res.status}${txt ? ` - ${txt.slice(0, 500)}` : ''}`)
+      }
       webhook = 'ok'
     } catch (err: any) {
       console.error('WEBHOOK_FAILED', { quote_id, job_id, upload_session_id, error: err?.message })
