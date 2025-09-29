@@ -13,7 +13,7 @@ import { OrderOptions, OrderOptionsForm } from '@/components/OrderOptionsForm'
 import { OrderSummary, SummaryData } from '@/components/OrderSummary'
 import { ConfirmationPage } from '@/components/ConfirmationPage'
 
-const ACCEPT = '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx'
+const ACCEPT = '.pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx,.xls,.xlsx'
 
 export default function QuoteFlowPage() {
   const router = useRouter()

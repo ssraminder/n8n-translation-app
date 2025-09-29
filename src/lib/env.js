@@ -37,12 +37,13 @@ const ALLOWED_FILE_TYPES = new Set([
   'application/pdf',
   'image/jpeg',
   'image/png',
+  'image/tiff',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ]);
 
-const ALLOWED_EXTENSIONS = new Set(['.pdf','.jpg','.jpeg','.png','.doc','.docx','.xls','.xlsx']);
+const ALLOWED_EXTENSIONS = new Set(['.pdf','.jpg','.jpeg','.png','.tif','.tiff','.doc','.docx','.xls','.xlsx']);
 
 module.exports = { getEnv, ALLOWED_FILE_TYPES, ALLOWED_EXTENSIONS };

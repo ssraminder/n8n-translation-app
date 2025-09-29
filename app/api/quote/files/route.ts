@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getEnv } from '@/src/lib/env'
+import { PDFDocument } from 'pdf-lib'
+import { PNG } from 'pngjs'
+import * as UTIF from 'utif'
+
+export const runtime = 'nodejs'
 
 function trimName(name: string | null | undefined) {
   if (!name) return null
@@ -25,6 +30,20 @@ function jobIdFromQuote(id: string) {
 
 function isUuid(v: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)
+}
+
+async function tiffToPng(buffer: Buffer): Promise<Buffer> {
+  const ifds: any[] = UTIF.decode(buffer)
+  if (!ifds || !ifds.length) throw new Error('TIFF_DECODE_ERROR')
+  UTIF.decodeImage(buffer, ifds[0])
+  const rgba: Uint8Array = UTIF.toRGBA8(ifds[0])
+  const width = (ifds[0] as any).width || (ifds[0] as any).t256 || (ifds[0] as any).cols || 0
+  const height = (ifds[0] as any).height || (ifds[0] as any).t257 || (ifds[0] as any).rows || 0
+  if (!width || !height) throw new Error('TIFF_SIZE_ERROR')
+  const png = new PNG({ width, height })
+  ;(png as any).data = Buffer.from(rgba)
+  const out = PNG.sync.write(png as any)
+  return out
 }
 
 export async function POST(req: NextRequest) {
@@ -135,6 +154,69 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'DB_ERROR_FILES', details: upsertErr.message }, { status: 500 })
   }
 
+  // Build a single PDF from uploaded images (png/jpg/tiff) and upload to storage
+  let combined_pdf: { path: string } | null = null
+  try {
+    const imageEntries = (files as { path: string; contentType?: string; filename?: string }[]).filter(f => /image\/(png|jpe?g|tiff)/i.test(f.contentType || ''))
+    if (imageEntries.length) {
+      const pdf = await PDFDocument.create()
+      for (const f of imageEntries) {
+        const { data: blob } = await supabase.storage.from('orders').download(f.path)
+        if (!blob) continue
+        const buf = Buffer.from(await (blob as any).arrayBuffer())
+        const ct = (f.contentType || '').toLowerCase()
+        if (ct.includes('tif')) {
+          const pngBuf = await tiffToPng(buf)
+          const img = await pdf.embedPng(pngBuf)
+          const { width, height } = img.scale(1)
+          const page = pdf.addPage([width, height])
+          page.drawImage(img, { x: 0, y: 0, width, height })
+        } else if (ct.includes('png')) {
+          const img = await pdf.embedPng(buf)
+          const { width, height } = img.scale(1)
+          const page = pdf.addPage([width, height])
+          page.drawImage(img, { x: 0, y: 0, width, height })
+        } else {
+          const img = await pdf.embedJpg(buf)
+          const { width, height } = img.scale(1)
+          const page = pdf.addPage([width, height])
+          page.drawImage(img, { x: 0, y: 0, width, height })
+        }
+      }
+      const pdfBytes = await pdf.save()
+      const file_id = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) as string
+      const filename = `combined_${upload_session_id}.pdf`
+      const path = `${quote_id}/${file_id}__${encodeURIComponent(filename)}`
+      const up = await supabase.storage.from('orders').upload(path, Buffer.from(pdfBytes), { contentType: 'application/pdf', upsert: true })
+      if (!up.error) {
+        const { data: signed2 } = await supabase.storage.from('orders').createSignedUrl(path, ttl)
+        const row = {
+          quote_id,
+          job_id,
+          file_id,
+          filename,
+          storage_key: path,
+          file_url: signed2?.signedUrl || null,
+          file_url_expires_at: expiresAt,
+          source_lang,
+          target_lang,
+          intended_use_id,
+          country_of_issue,
+          status: 'uploaded',
+          upload_session_id,
+          storage_path: path,
+          signed_url: signed2?.signedUrl || null,
+          bytes: (pdfBytes as any).length || null,
+          content_type: 'application/pdf',
+        }
+        await supabase.from('quote_files').upsert(row, { onConflict: 'quote_id,storage_key', ignoreDuplicates: true })
+        combined_pdf = { path }
+      }
+    }
+  } catch (e: any) {
+    // fail-safe: do not block the request if conversion fails
+  }
+
   // Webhook with correlation IDs; try configured URL, then production fallback if -test URL was provided. One retry.
   let webhook = 'skipped'
   if (env.N8N_WEBHOOK_URL) {
@@ -184,5 +266,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, webhook, upload_session_id })
+  return NextResponse.json({ ok: true, webhook, upload_session_id, combined_pdf })
 }
