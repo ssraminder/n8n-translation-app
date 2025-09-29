@@ -135,23 +135,51 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'DB_ERROR_FILES', details: upsertErr.message }, { status: 500 })
   }
 
-  // Minimal webhook with correlation IDs; one retry on failure
+  // Webhook with correlation IDs; try configured URL, then production fallback if -test URL was provided. One retry.
   let webhook = 'skipped'
   if (env.N8N_WEBHOOK_URL) {
-    const body = JSON.stringify({ quote_id, job_id })
-    try {
-      const res = await fetch(env.N8N_WEBHOOK_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
+    const payloadOut = {
+      quote_id,
+      job_id,
+      event: 'files_uploaded',
+      source_language: source_lang || '',
+      target_language: target_lang || '',
+      intended_use_id: intended_use_id || null,
+      country_of_issue: country_of_issue || ''
+    }
+    const primaryUrl = env.N8N_WEBHOOK_URL
+    const prodUrl = /\/webhook-test\//.test(primaryUrl) ? primaryUrl.replace('/webhook-test/', '/webhook/') : null
+    const headers = { 'content-type': 'application/json' }
+    const body = JSON.stringify(payloadOut)
+
+    async function tryPost(url: string) {
+      const res = await fetch(url, { method: 'POST', headers, body })
       if (!res.ok) {
         let txt = ''
         try { txt = await res.text() } catch (_) {}
         throw new Error(`HTTP ${res.status}${txt ? ` - ${txt.slice(0, 500)}` : ''}`)
       }
-      webhook = 'ok'
+    }
+
+    try {
+      try {
+        await tryPost(primaryUrl)
+        webhook = 'ok'
+      } catch (ePrimary: any) {
+        if (prodUrl) {
+          await tryPost(prodUrl)
+          webhook = 'ok_prod_fallback'
+        } else {
+          throw ePrimary
+        }
+      }
     } catch (err: any) {
       console.error('WEBHOOK_FAILED', { quote_id, job_id, upload_session_id, error: err?.message })
       webhook = 'failed'
       setTimeout(() => {
-        fetch(env.N8N_WEBHOOK_URL!, { method: 'POST', headers: { 'content-type': 'application/json' }, body }).catch(() => {})
+        tryPost(primaryUrl).catch(() => {
+          if (prodUrl) tryPost(prodUrl).catch(() => {})
+        })
       }, 3000)
     }
   }
