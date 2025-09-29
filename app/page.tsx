@@ -25,6 +25,7 @@ export default function QuoteFlowPage() {
   const [processingOpen, setProcessingOpen] = useState(false)
   const [overlayMode, setOverlayMode] = useState<'upload' | 'process'>('process')
   const [quoteId, setQuoteId] = useState<string | null>(null)
+  const [pendingOtpCode, setPendingOtpCode] = useState<string>('')
 
   const quote: QuoteDetails = useMemo(()=> ({
     price: 89.95,
@@ -117,9 +118,24 @@ export default function QuoteFlowPage() {
     try {
       const submitRes = await fetch('/api/quote/update-client', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ quote_id: quoteId, client_name: details.fullName, client_email: details.email })
+        body: JSON.stringify({ quote_id: quoteId, client_name: details.fullName, client_email: details.email, phone: details.phone })
       })
       if (!submitRes.ok) throw new Error('UPDATE_CLIENT_FAILED')
+      setProcessingOpen(false)
+      setOtpOpen(true)
+    } catch (e) {
+      console.error(e)
+      setProcessingOpen(false)
+      alert('There was a problem saving your details. Please try again.')
+    }
+  }
+
+  async function verifyOtpAndProcess(code: string) {
+    setPendingOtpCode(code)
+    setOtpOpen(false)
+    setOverlayMode('process')
+    setProcessingOpen(true)
+    try {
       const start = Date.now()
       while (Date.now() - start < 45000) {
         await new Promise(r => setTimeout(r, 2000))
@@ -211,7 +227,7 @@ export default function QuoteFlowPage() {
 
       </div>
 
-      <OtpModal open={otpOpen} onVerify={()=>{}} onClose={()=> setOtpOpen(false)} onResend={()=>{}} />
+      <OtpModal open={otpOpen} onVerify={(code)=>verifyOtpAndProcess(code)} onClose={()=> setOtpOpen(false)} onResend={()=>{}} />
       <ProcessingOverlay open={processingOpen} mode={overlayMode} onDone={()=> {}} />
     </div>
   )
