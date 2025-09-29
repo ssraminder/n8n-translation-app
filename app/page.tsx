@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ProgressBar, StepIndex } from '@/components/ProgressBar'
 import { FileUploadArea } from '@/components/FileUploadArea'
 import { UploadedFilesList } from '@/components/UploadedFilesList'
-import { LanguageSelects, LanguageState } from '@/components/LanguageSelects'
+import type { LanguageState } from '@/components/LanguageSelects'
 import { ClientDetails, ClientDetailsForm } from '@/components/ClientDetailsForm'
 import { OtpModal } from '@/components/OtpModal'
 import { ProcessingOverlay } from '@/components/ProcessingOverlay'
@@ -91,11 +91,7 @@ export default function QuoteFlowPage() {
         body: JSON.stringify({
           quote_id,
           idempotency_key,
-          files: uploaded,
-          source_lang: langs.source_code || '',
-          target_lang: (langs.target === 'Other' ? '' : (langs.target_code || '')),
-          intended_use_id: typeof (langs as any).intended_use_id === 'number' ? (langs as any).intended_use_id : undefined,
-          country_of_issue: (langs as any).country_code || undefined,
+          files: uploaded
         })
       })
       if (!filesRes.ok) throw new Error('FILES_SAVE_FAILED')
@@ -168,15 +164,6 @@ export default function QuoteFlowPage() {
               setFiles(combined)
             }} />
             <UploadedFilesList files={files} onRemove={(idx)=> setFiles(files.filter((_,i)=>i!==idx))} />
-            <details open={files.length > 0} className="mt-6 bg-white rounded-lg shadow-sm border">
-              <summary className="cursor-pointer list-none select-none px-4 py-3 flex items-center justify-between">
-                <span className="font-medium text-gray-900">Languages & Intended Use</span>
-                <span className="text-xs text-gray-500">{files.length === 0 ? 'Upload a file to expand' : 'Ready'}</span>
-              </summary>
-              <div className="p-4 border-t">
-                <LanguageSelects value={langs} onChange={setLangs} />
-              </div>
-            </details>
             <button onClick={startQuote} className="mt-8 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors">Get Instant Quote</button>
           </div>
         )}
@@ -222,14 +209,6 @@ export default function QuoteFlowPage() {
           <ConfirmationPage orderNumber="#TO-2024-001234" totalPaid={pricing.total} timeline={order.speed === 'standard' ? '3-5 business days' : order.speed === 'rush' ? '1-2 business days' : 'Same day'} />
         )}
 
-        <div className="mt-12 flex justify-center space-x-4">
-          <button onClick={()=>setStep(1)} className="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors">Show Step 1</button>
-          <button onClick={()=>setStep(2)} className="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors">Show Step 2</button>
-          <button onClick={()=>setStep(3)} className="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors">Show Step 3</button>
-          <button onClick={()=>setStep(4)} className="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors">Show Step 4</button>
-          <button onClick={()=>setStep(5)} className="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors">Show Step 5</button>
-          <button onClick={()=>{ setProcessingOpen(true) }} className="bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors">Demo Processing</button>
-        </div>
       </div>
 
       <OtpModal open={otpOpen} onVerify={()=>{}} onClose={()=> setOtpOpen(false)} onResend={()=>{}} />

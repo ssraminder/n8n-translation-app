@@ -98,7 +98,12 @@ export async function POST(req: NextRequest) {
   const expiresAt = new Date(Date.now() + ttl * 1000).toISOString()
 
   const rows: any[] = []
-  for (const f of files as { path: string; contentType?: string; filename?: string; bytes?: number }[]) {
+
+  const imageEntries = (files as { path: string; contentType?: string; filename?: string; bytes?: number }[]).filter(f => /image\/(png|jpe?g|tiff)/i.test(f.contentType || ''))
+  const nonImageEntries = (files as { path: string; contentType?: string; filename?: string; bytes?: number }[]).filter(f => !/image\/(png|jpe?g|tiff)/i.test(f.contentType || ''))
+
+  // Insert non-image files as-is
+  for (const f of nonImageEntries) {
     const path = f.path
     if (!path) return NextResponse.json({ error: 'MISSING_PATH', message: 'File path missing' }, { status: 400 })
     const { data: signed, error: signErr } = await supabase.storage.from('orders').createSignedUrl(path, ttl)
@@ -123,7 +128,6 @@ export async function POST(req: NextRequest) {
       country_of_issue,
       status: 'uploaded',
       upload_session_id,
-      // Back-compat fields
       storage_path: path,
       signed_url: signed?.signedUrl || null,
       bytes: typeof f.bytes === 'number' ? f.bytes : null,
@@ -131,35 +135,13 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // Upsert to avoid duplicates across retries; if unique index missing, fallback to selective insert
-  const { error: upsertErr } = await supabase
-    .from('quote_files')
-    .upsert(rows, { onConflict: 'quote_id,storage_key', ignoreDuplicates: true })
-
-  if (upsertErr && /no unique|exclusion constraint/i.test(upsertErr.message || '')) {
-    const keys = rows.map(r => r.storage_key)
-    const { data: existing, error: selErr } = await supabase
-      .from('quote_files')
-      .select('storage_key')
-      .eq('quote_id', quote_id)
-      .in('storage_key', keys)
-    if (selErr) return NextResponse.json({ error: 'DB_ERROR_FILES', details: selErr.message }, { status: 500 })
-    const existingSet = new Set((existing || []).map((r: any) => r.storage_key))
-    const toInsert = rows.filter(r => !existingSet.has(r.storage_key))
-    if (toInsert.length) {
-      const { error: insErr } = await supabase.from('quote_files').insert(toInsert)
-      if (insErr) return NextResponse.json({ error: 'DB_ERROR_FILES', details: insErr.message }, { status: 500 })
-    }
-  } else if (upsertErr) {
-    return NextResponse.json({ error: 'DB_ERROR_FILES', details: upsertErr.message }, { status: 500 })
-  }
-
-  // Build a single PDF from uploaded images (png/jpg/tiff) and upload to storage
+  // Try to build a single PDF from uploaded images (png/jpg/tiff)
   let combined_pdf: { path: string } | null = null
+  let combinedRow: any | null = null
   try {
-    const imageEntries = (files as { path: string; contentType?: string; filename?: string }[]).filter(f => /image\/(png|jpe?g|tiff)/i.test(f.contentType || ''))
     if (imageEntries.length) {
       const pdf = await PDFDocument.create()
+      let pagesAdded = 0
       for (const f of imageEntries) {
         const { data: blob } = await supabase.storage.from('orders').download(f.path)
         if (!blob) continue
@@ -171,29 +153,32 @@ export async function POST(req: NextRequest) {
           const { width, height } = img.scale(1)
           const page = pdf.addPage([width, height])
           page.drawImage(img, { x: 0, y: 0, width, height })
+          pagesAdded++
         } else if (ct.includes('png')) {
           const img = await pdf.embedPng(buf)
           const { width, height } = img.scale(1)
           const page = pdf.addPage([width, height])
           page.drawImage(img, { x: 0, y: 0, width, height })
+          pagesAdded++
         } else {
           const img = await pdf.embedJpg(buf)
           const { width, height } = img.scale(1)
           const page = pdf.addPage([width, height])
           page.drawImage(img, { x: 0, y: 0, width, height })
+          pagesAdded++
         }
       }
+      if (pagesAdded === 0) throw new Error('NO_PAGES')
       const pdfBytes = await pdf.save()
-      const file_id = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) as string
       const filename = `combined_${upload_session_id}.pdf`
-      const path = `${quote_id}/${file_id}__${encodeURIComponent(filename)}`
+      const path = `${quote_id}/combined__${encodeURIComponent(upload_session_id)}.pdf`
       const up = await supabase.storage.from('orders').upload(path, Buffer.from(pdfBytes), { contentType: 'application/pdf', upsert: true })
       if (!up.error) {
         const { data: signed2 } = await supabase.storage.from('orders').createSignedUrl(path, ttl)
-        const row = {
+        combinedRow = {
           quote_id,
           job_id,
-          file_id,
+          file_id: upload_session_id,
           filename,
           storage_key: path,
           file_url: signed2?.signedUrl || null,
@@ -209,15 +194,69 @@ export async function POST(req: NextRequest) {
           bytes: (pdfBytes as any).length || null,
           content_type: 'application/pdf',
         }
-        await supabase.from('quote_files').upsert(row, { onConflict: 'quote_id,storage_key', ignoreDuplicates: true })
+        rows.push(combinedRow)
         combined_pdf = { path }
+      } else {
+        throw new Error(up.error.message || 'UPLOAD_FAILED')
       }
     }
-  } catch (e: any) {
-    // fail-safe: do not block the request if conversion fails
+  } catch (_) {
+    // Fallback: insert original images individually if combining fails
+    for (const f of imageEntries) {
+      const path = f.path
+      if (!path) continue
+      const { data: signed, error: signErr } = await supabase.storage.from('orders').createSignedUrl(path, ttl)
+      if (signErr) return NextResponse.json({ error: 'SIGN_URL_ERROR', details: signErr.message }, { status: 500 })
+      const file_id = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) as string
+      const filename = trimName(f.filename) || (path.split('/').pop() || 'upload.bin')
+      rows.push({
+        quote_id,
+        job_id,
+        file_id,
+        filename,
+        storage_key: path,
+        file_url: signed?.signedUrl || null,
+        file_url_expires_at: expiresAt,
+        source_lang,
+        target_lang,
+        intended_use_id,
+        country_of_issue,
+        status: 'uploaded',
+        upload_session_id,
+        storage_path: path,
+        signed_url: signed?.signedUrl || null,
+        bytes: typeof f.bytes === 'number' ? f.bytes : null,
+        content_type: f.contentType || null,
+      })
+    }
   }
 
-  // Webhook with correlation IDs; try configured URL, then production fallback if -test URL was provided. One retry.
+  // Persist rows (non-images + combined OR fallback originals)
+  if (rows.length) {
+    const { error: upsertErr } = await supabase
+      .from('quote_files')
+      .upsert(rows, { onConflict: 'quote_id,storage_key', ignoreDuplicates: true })
+
+    if (upsertErr && /no unique|exclusion constraint/i.test(upsertErr.message || '')) {
+      const keys = rows.map(r => r.storage_key)
+      const { data: existing, error: selErr } = await supabase
+        .from('quote_files')
+        .select('storage_key')
+        .eq('quote_id', quote_id)
+        .in('storage_key', keys)
+      if (selErr) return NextResponse.json({ error: 'DB_ERROR_FILES', details: selErr.message }, { status: 500 })
+      const existingSet = new Set((existing || []).map((r: any) => r.storage_key))
+      const toInsert = rows.filter(r => !existingSet.has(r.storage_key))
+      if (toInsert.length) {
+        const { error: insErr } = await supabase.from('quote_files').insert(toInsert)
+        if (insErr) return NextResponse.json({ error: 'DB_ERROR_FILES', details: insErr.message }, { status: 500 })
+      }
+    } else if (upsertErr) {
+      return NextResponse.json({ error: 'DB_ERROR_FILES', details: upsertErr.message }, { status: 500 })
+    }
+  }
+
+  // Webhook with correlation IDs
   let webhook = 'skipped'
   if (env.N8N_WEBHOOK_URL) {
     const payloadOut = {
