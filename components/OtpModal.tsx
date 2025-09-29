@@ -4,11 +4,15 @@ import { useLucide } from './useLucide'
 
 export function OtpModal({ open, onVerify, onClose, onResend }: { open: boolean; onVerify: (code: string) => void; onClose: () => void; onResend: () => void }) {
   useLucide([open])
-  const firstRef = useRef<HTMLInputElement>(null)
   const inputsRef = useRef<Array<HTMLInputElement | null>>([])
   const [digits, setDigits] = useState<string[]>(['','','','','',''])
 
-  useEffect(()=>{ if (open) { setDigits(['','','','','','']); setTimeout(()=>firstRef.current?.focus(), 0) } }, [open])
+  useEffect(()=>{
+    if (open) {
+      setDigits(['','','','','',''])
+      setTimeout(()=> inputsRef.current[0]?.focus(), 0)
+    }
+  }, [open])
 
   function handleChange(idx: number, val: string) {
     const v = val.replace(/[^0-9]/g, '').slice(0, 1)
@@ -35,7 +39,7 @@ export function OtpModal({ open, onVerify, onClose, onResend }: { open: boolean;
           {Array.from({length:6}).map((_,i)=> (
             <input
               key={i}
-              ref={(el)=>{ if (i===0) firstRef.current = el as any; inputsRef.current[i]=el }}
+              ref={(el)=>{ inputsRef.current[i] = el }}
               type="text"
               inputMode="numeric"
               maxLength={1}
