@@ -209,14 +209,6 @@ export default function QuoteFlowPage() {
           <ConfirmationPage orderNumber="#TO-2024-001234" totalPaid={pricing.total} timeline={order.speed === 'standard' ? '3-5 business days' : order.speed === 'rush' ? '1-2 business days' : 'Same day'} />
         )}
 
-        <div className="mt-12 flex justify-center space-x-4">
-          <button onClick={()=>setStep(1)} className="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors">Show Step 1</button>
-          <button onClick={()=>setStep(2)} className="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors">Show Step 2</button>
-          <button onClick={()=>setStep(3)} className="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors">Show Step 3</button>
-          <button onClick={()=>setStep(4)} className="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors">Show Step 4</button>
-          <button onClick={()=>setStep(5)} className="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-medium hover:bg-gray-300 transition-colors">Show Step 5</button>
-          <button onClick={()=>{ setProcessingOpen(true) }} className="bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors">Demo Processing</button>
-        </div>
       </div>
 
       <OtpModal open={otpOpen} onVerify={()=>{}} onClose={()=> setOtpOpen(false)} onResend={()=>{}} />
