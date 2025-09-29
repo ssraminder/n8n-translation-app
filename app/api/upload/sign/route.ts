@@ -61,8 +61,7 @@ export async function POST(req: NextRequest) {
     }
   }
   if (error || !data?.signedUrl) {
-    const origin = new URL(req.url).origin
-    const directUrl = `${origin}/api/upload/put?path=${encodeURIComponent(path)}&type=${encodeURIComponent(contentType)}`
+    const directUrl = `/api/upload/put?path=${encodeURIComponent(path)}&type=${encodeURIComponent(contentType)}`
     return NextResponse.json({ path, url: directUrl, headers: { 'content-type': contentType } })
   }
 
