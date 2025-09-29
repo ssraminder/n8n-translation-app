@@ -60,8 +60,10 @@ export async function POST(req: NextRequest) {
       }
     }
   }
-  if (error) {
-    return NextResponse.json({ error: 'SIGN_URL_ERROR', details: error.message }, { status: 500 })
+  if (error || !data?.signedUrl) {
+    const origin = new URL(req.url).origin
+    const directUrl = `${origin}/api/upload/put?path=${encodeURIComponent(path)}&type=${encodeURIComponent(contentType)}`
+    return NextResponse.json({ path, url: directUrl, headers: { 'content-type': contentType } })
   }
 
   return NextResponse.json({ path, url: data?.signedUrl, headers: { 'x-upsert': 'false', 'content-type': contentType } })
