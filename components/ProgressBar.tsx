@@ -1,5 +1,4 @@
 "use client"
-import { useLucide } from './useLucide'
 
 export type StepIndex = 1 | 2 | 3 | 4 | 5
 
@@ -12,7 +11,6 @@ const STEP_LABELS: Record<StepIndex, string> = {
 }
 
 export function ProgressBar({ step }: { step: StepIndex }) {
-  useLucide([step])
   const clamped = Math.min(5, Math.max(1, step)) as StepIndex
   const percent = ((clamped - 1) / 4) * 100
   const label = STEP_LABELS[clamped]
