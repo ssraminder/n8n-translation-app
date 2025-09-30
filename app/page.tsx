@@ -12,6 +12,8 @@ import { QuoteDetails, QuoteReviewCard } from '@/components/QuoteReviewCard'
 import { OrderOptions, OrderOptionsForm } from '@/components/OrderOptionsForm'
 import { OrderSummary, SummaryData } from '@/components/OrderSummary'
 import { ConfirmationPage } from '@/components/ConfirmationPage'
+import { DocumentTypeSelect } from '@/components/DocumentTypeSelect'
+import { ReferenceModal } from '@/components/ReferenceModal'
 
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx,.xls,.xlsx'
 
