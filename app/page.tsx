@@ -78,9 +78,13 @@ export default function QuoteFlowPage() {
     setOverlayMode('upload')
     setProcessingOpen(true)
     try {
-      const createRes = await fetch('/api/quote/create', { method: 'POST' })
-      if (!createRes.ok) throw new Error('CREATE_FAILED')
-      const { quote_id } = await createRes.json()
+      let quote_id = quoteId
+      if (!quote_id) {
+        const createRes = await fetch('/api/quote/create', { method: 'POST' })
+        if (!createRes.ok) throw new Error('CREATE_FAILED')
+        const json = await createRes.json()
+        quote_id = json.quote_id
+      }
       const uploaded: { path: string; contentType: string; filename: string; bytes: number }[] = []
       const idempotency_key = newId()
       for (const f of files) {
