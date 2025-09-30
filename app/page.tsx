@@ -264,7 +264,7 @@ export default function QuoteFlowPage() {
 
       </div>
 
-      <OtpModal open={otpOpen} onVerify={(code)=>verifyOtpAndProcess(code)} onClose={()=> setOtpOpen(false)} onResend={()=>{}} />
+      <OtpModal open={otpOpen} onVerify={(code)=>verifyOtpAndProcess(code)} onClose={()=> setOtpOpen(false)} onSend={async ()=>{}} onResend={async ()=>{}} />
       <ProcessingOverlay open={processingOpen} mode={overlayMode} onDone={()=> {}} />
     </div>
   )
