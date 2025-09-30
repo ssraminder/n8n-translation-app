@@ -80,11 +80,14 @@ export default function QuoteFlowPage() {
     setOverlayMode('upload')
     setProcessingOpen(true)
     try {
-      let quote_id = quoteId
-      if (!quote_id) {
+      let quote_id: string
+      if (quoteId) {
+        quote_id = quoteId
+      } else {
         const createRes = await fetch('/api/quote/create', { method: 'POST' })
         if (!createRes.ok) throw new Error('CREATE_FAILED')
         const json = await createRes.json()
+        if (!json?.quote_id || typeof json.quote_id !== 'string') throw new Error('CREATE_NO_ID')
         quote_id = json.quote_id
       }
       const uploaded: { path: string; contentType: string; filename: string; bytes: number }[] = []
