@@ -6,7 +6,12 @@ export async function POST(req: NextRequest) {
   if (!quote_id || !client_name || !client_email) {
     return NextResponse.json({ error: 'INVALID' }, { status: 400 })
   }
-  const supabase = createClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_ANON_KEY as string)
+
+  const supabaseUrl = process.env.SUPABASE_URL as string
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string | undefined
+  const anonKey = process.env.SUPABASE_ANON_KEY as string
+  // Prefer service role on the server to avoid RLS issues; fallback to anon if not configured
+  const supabase = createClient(supabaseUrl, serviceKey || anonKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
   // Optional: create or find customer by email
   let customer_id: string | null = null
@@ -19,14 +24,10 @@ export async function POST(req: NextRequest) {
       customer_id = (created as any)?.id || null
     }
   } catch (_) {
-    // If customers table doesn't exist or insert fails, continue without blocking
     customer_id = null
   }
 
-  const update: Record<string, any> = { status: 'submitted' }
-  // Use whichever column names exist in this project
-  update.name = client_name
-  update.email = client_email
+  const update: Record<string, any> = { status: 'submitted', name: client_name, email: client_email }
   if (typeof phone === 'string' && phone) update.phone = phone
   if (customer_id) update.customer_id = customer_id
 
@@ -34,6 +35,9 @@ export async function POST(req: NextRequest) {
     .from('quote_submissions')
     .update(update)
     .eq('quote_id', quote_id)
-  if (error) return NextResponse.json({ error: 'DB_ERROR', details: error.message }, { status: 500 })
+  if (error) {
+    // Surface a clear error to the client without crashing
+    return NextResponse.json({ error: 'DB_ERROR', details: error.message }, { status: 500 })
+  }
   return NextResponse.json({ ok: true, customer_id })
 }
