@@ -1,9 +1,7 @@
 "use client"
 import { useEffect, useRef, useState } from 'react'
-import { useLucide } from './useLucide'
 
 export function OtpModal({ open, onVerify, onClose, onResend }: { open: boolean; onVerify: (code: string) => void; onClose: () => void; onResend: () => void }) {
-  useLucide([open])
   const inputsRef = useRef<Array<HTMLInputElement | null>>([])
   const [digits, setDigits] = useState<string[]>(['','','','','',''])
 
