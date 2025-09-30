@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useRef, useState } from 'react'
-import { useLucide } from './useLucide'
+import { Icon } from './Icon'
 
 const STEPS = [
   { id: 'analyzing', label: 'Analyzing your documents...', duration: 2000 },
@@ -13,7 +13,6 @@ export function ProcessingOverlay({ open, onDone, mode = 'process' }: { open: bo
   const [current, setCurrent] = useState(0)
   const [progress, setProgress] = useState(0)
   const timer = useRef<any>(null)
-  useLucide([open, current, mode])
 
   useEffect(()=>{
     if (!open) return
@@ -56,7 +55,7 @@ export function ProcessingOverlay({ open, onDone, mode = 'process' }: { open: bo
           {(mode === 'upload' ? UPLOAD_STEPS : PROCESS_STEPS).map((s, i)=> (
             <div key={s.id} className={'flex items-center justify-center space-x-3 ' + (i <= current ? '' : 'opacity-50')}>
               <div className={i <= current ? 'w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center' : 'w-6 h-6 border-2 border-gray-300 rounded-full flex items-center justify-center'}>
-                {i < current ? (<i data-lucide="check" className="w-4 h-4 text-white"></i>) : (<div className={i === current ? 'w-2 h-2 bg-blue-600 rounded-full animate-pulse' : 'w-2 h-2 bg-gray-300 rounded-full'}></div>)}
+                {i < current ? (<Icon name="check" className="w-4 h-4 text-white" />) : (<div className={i === current ? 'w-2 h-2 bg-blue-600 rounded-full animate-pulse' : 'w-2 h-2 bg-gray-300 rounded-full'}></div>)}
               </div>
               <span className={'text-lg font-medium ' + (i <= current ? 'text-gray-900' : 'text-gray-600')}>{s.label}</span>
             </div>
