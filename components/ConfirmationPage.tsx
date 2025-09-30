@@ -1,12 +1,11 @@
 "use client"
-import { useLucide } from './useLucide'
+import { Icon } from './Icon'
 
 export function ConfirmationPage({ orderNumber, totalPaid, timeline }: { orderNumber: string; totalPaid: number; timeline: string }) {
-  useLucide([orderNumber])
   return (
     <div className="text-center">
       <div className="mx-auto w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6">
-        <i data-lucide="check" className="w-10 h-10 text-green-600"></i>
+        <Icon name="check" className="w-10 h-10 text-green-600" />
       </div>
       <h2 className="text-3xl font-bold text-gray-900 mb-4">Thank You!</h2>
       <p className="text-lg text-gray-600 mb-8">Your order has been successfully placed and payment confirmed.</p>

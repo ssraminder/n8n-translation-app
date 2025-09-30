@@ -1,5 +1,5 @@
 "use client"
-import { useLucide } from './useLucide'
+import { Icon } from './Icon'
 
 export type QuoteDetails = {
   price: number
@@ -11,7 +11,6 @@ export type QuoteDetails = {
 }
 
 export function QuoteReviewCard({ details, onAccept }: { details: QuoteDetails; onAccept: () => void }) {
-  useLucide([details])
   const priceFmt = `$${details.price.toFixed(2)}`
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 md:p-8">
@@ -32,9 +31,9 @@ export function QuoteReviewCard({ details, onAccept }: { details: QuoteDetails; 
         <button onClick={onAccept} className="bg-green-600 text-white py-4 px-8 rounded-lg text-lg font-semibold hover:bg-green-700 transition-colors shadow-lg">Accept & Proceed</button>
       </div>
       <div className="flex flex-col sm:flex-row items-center justify-center space-y-3 sm:space-y-0 sm:space-x-8 text-center">
-        <a href="#" className="text-blue-600 hover:text-blue-800 hover:underline font-medium flex items-center"><i data-lucide="download" className="w-4 h-4 mr-2"></i>Save Quote</a>
-        <a href="#" className="text-blue-600 hover:text-blue-800 hover:underline font-medium flex items-center"><i data-lucide="mail" className="w-4 h-4 mr-2"></i>Email Quote</a>
-        <a href="#" className="text-blue-600 hover:text-blue-800 hover:underline font-medium flex items-center"><i data-lucide="user" className="w-4 h-4 mr-2"></i>Request Human Review</a>
+        <a href="#" className="text-blue-600 hover:text-blue-800 hover:underline font-medium flex items-center"><Icon name="download" className="w-4 h-4 mr-2" />Save Quote</a>
+        <a href="#" className="text-blue-600 hover:text-blue-800 hover:underline font-medium flex items-center"><Icon name="mail" className="w-4 h-4 mr-2" />Email Quote</a>
+        <a href="#" className="text-blue-600 hover:text-blue-800 hover:underline font-medium flex items-center"><Icon name="user" className="w-4 h-4 mr-2" />Request Human Review</a>
       </div>
     </div>
   )
