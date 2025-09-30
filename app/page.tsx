@@ -133,24 +133,7 @@ export default function QuoteFlowPage() {
   async function verifyOtpAndProcess(code: string) {
     setPendingOtpCode(code)
     setOtpOpen(false)
-    setOverlayMode('process')
-    setProcessingOpen(true)
-    try {
-      const start = Date.now()
-      while (Date.now() - start < 45000) {
-        await new Promise(r => setTimeout(r, 2000))
-        const st = await fetch(`/api/quote/status/${quoteId}`)
-        if (st.ok) {
-          const { stage } = await st.json()
-          if (stage && (stage === 'ready' || stage === 'calculated')) break
-        }
-      }
-      router.push(`/quote/${quoteId}`)
-    } catch (e) {
-      console.error(e)
-      setProcessingOpen(false)
-      alert('There was a problem processing your quote. Please try again.')
-    }
+    setStep(3)
   }
 
   return (
@@ -197,26 +180,71 @@ export default function QuoteFlowPage() {
         {step === 3 && (
           <div>
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Your Translation Quote</h2>
-              <p className="text-gray-600">Review your quote details below</p>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Select Languages and Intended Use</h2>
+              <p className="text-gray-600">Confirm or adjust your source/target languages and intended use</p>
             </div>
-            <QuoteReviewCard details={quote} onAccept={()=> setStep(4)} />
+            <LanguageSelects value={langs} onChange={setLangs} />
+            <button
+              className="mt-8 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+              onClick={async ()=>{
+                if (!quoteId) { alert('Missing quote. Please start again.'); setStep(1); return }
+                if (!langs.source || !(langs.target || langs.targetOther) || !langs.purpose) { alert('Please select source, target, and intended use.'); return }
+                const targetText = langs.target === 'Other' ? (langs.targetOther || '') : langs.target
+                try {
+                  setOverlayMode('process')
+                  setProcessingOpen(true)
+                  const res = await fetch('/api/quote/update-client', {
+                    method: 'POST', headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                      quote_id: quoteId,
+                      client_name: details.fullName,
+                      client_email: details.email,
+                      phone: details.phone,
+                      source_lang: langs.source,
+                      target_lang: targetText,
+                      intended_use_id: langs.intended_use_id,
+                      intended_use: langs.purpose
+                    })
+                  })
+                  if (!res.ok) throw new Error('UPDATE_FAILED')
+                  setStep(4)
+
+                  // Wait up to 30s for quote readiness
+                  const start = Date.now()
+                  let ready = false
+                  while (Date.now() - start < 30000) {
+                    await new Promise(r=>setTimeout(r, 2000))
+                    const st = await fetch(`/api/quote/status/${quoteId}`)
+                    if (st.ok) {
+                      const { stage } = await st.json()
+                      if (stage === 'ready' || stage === 'calculated') { ready = true; break }
+                    }
+                  }
+                  if (ready) {
+                    router.push(`/quote/${quoteId}`)
+                  } else {
+                    // Request HITL and inform user
+                    await fetch('/api/quote/request-hitl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quote_id: quoteId }) })
+                    setProcessingOpen(false)
+                    alert('Your quote is taking longer than expected. A specialist will review it and email you shortly. You can also check your profile later to review your quote.')
+                  }
+                } catch (e) {
+                  console.error(e)
+                  setProcessingOpen(false)
+                  alert('There was a problem saving your selections. Please try again.')
+                }
+              }}
+            >
+              Continue
+            </button>
           </div>
         )}
 
         {step === 4 && (
           <div>
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Finalize Your Order</h2>
-              <p className="text-gray-600">Choose your delivery options and complete payment</p>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2">
-                <OrderOptionsForm value={order} onChange={setOrder} showDeliveryAddress={showDeliveryAddress} onToggleDeliveryVisibility={setShowDeliveryAddress} />
-              </div>
-              <div className="lg:col-span-1">
-                <OrderSummary data={pricing} onPay={()=> setStep(5)} />
-              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Preparing Your Quote</h2>
+              <p className="text-gray-600">We’re finalizing your quote. This usually takes under 30 seconds.</p>
             </div>
           </div>
         )}
