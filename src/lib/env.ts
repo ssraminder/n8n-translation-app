@@ -8,7 +8,7 @@ export function getEnv() {
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     BREVO_API_KEY: process.env.BREVO_API_KEY,
-    BREVO_FROM_EMAIL: process.env.BREVO_FROM_EMAIL || 'no-reply@example.com',
+    BREVO_FROM_EMAIL: process.env.BREVO_FROM_EMAIL,
     TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
     TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
     TWILIO_FROM: process.env.TWILIO_FROM,
