@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
   try {
     if (method === 'email') {
       if (!env.BREVO_API_KEY) return NextResponse.json({ error: 'EMAIL_NOT_CONFIGURED' }, { status: 501 })
+      if (!fromEmail) return NextResponse.json({ error: 'SENDER_EMAIL_MISSING' }, { status: 501 })
       const res = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'api-key': String(env.BREVO_API_KEY) },

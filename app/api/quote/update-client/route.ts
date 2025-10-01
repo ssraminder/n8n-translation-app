@@ -58,7 +58,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Fire webhook to n8n with updated selections
-  const webhook = process.env.N8N_WEBHOOK_URL
+  const env = { STEP3: process.env.N8N_STEP3_WEBHOOK_URL, PRIMARY: process.env.N8N_WEBHOOK_URL }
+  const webhook = env.STEP3 || env.PRIMARY
   if (webhook) {
     const payloadOut = {
       event: 'quote_updated',
