@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getEnv } from '@/src/lib/env'
 
+export const runtime = 'nodejs'
+
 export async function GET() {
   const env = getEnv()
   const email = Boolean(env.BREVO_API_KEY && env.BREVO_FROM_EMAIL)
