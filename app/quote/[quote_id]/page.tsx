@@ -4,7 +4,7 @@ import { QuoteActions } from '@/components/QuoteActions'
 type Props = { params: { quote_id: string } }
 export default async function QuotePage({ params }: Props) {
   const client = createClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_ANON_KEY as string)
-  const { data: result } = await client.from('quote_results').select('subtotal,tax,total,currency').eq('quote_id', params.quote_id).maybeSingle()
+  const { data: result } = await client.from('quote_results').select('subtotal,tax,total,currency,results_json').eq('quote_id', params.quote_id).maybeSingle()
   const { data: sub } = await client.from('quote_submissions').select('job_id').eq('quote_id', params.quote_id).maybeSingle()
   const jobId = sub?.job_id || null
 
