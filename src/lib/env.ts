@@ -12,6 +12,7 @@ export function getEnv() {
     TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
     TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
     TWILIO_FROM: process.env.TWILIO_FROM,
+    TWILIO_MESSAGING_SERVICE_SID: process.env.TWILIO_MESSAGING_SERVICE_SID,
     BASE_URL: process.env.BASE_URL,
     MAX_UPLOAD_MB: Number(process.env.MAX_UPLOAD_MB || 50),
     SIGNED_URL_TTL_SECS: Number(process.env.SIGNED_URL_TTL_SECS || 1209600),
