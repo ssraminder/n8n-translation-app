@@ -32,9 +32,8 @@ export async function POST(req: NextRequest) {
   const target_lang = typeof payload?.target_lang === 'string' ? payload.target_lang : undefined
   const intended_use: string | undefined = typeof payload?.intended_use === 'string' ? payload.intended_use : undefined
 
-  const update: Record<string, any> = { status: 'submitted', client_name, client_email }
+  const update: Record<string, any> = { status: 'submitted', name: client_name, email: client_email, client_email }
   if (typeof phone === 'string' && phone) update.phone = phone
-  if (customer_id) update.customer_id = customer_id
   if (source_lang) update.source_lang = source_lang
   if (target_lang) update.target_lang = target_lang
   if (typeof intended_use === 'string') update.intended_use = intended_use
