@@ -59,23 +59,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'DB_ERROR', details: error.message }, { status: 500 })
   }
 
-  // Fire webhook to n8n with updated selections
-  const env = { STEP3: process.env.N8N_STEP3_WEBHOOK_URL, PRIMARY: process.env.N8N_WEBHOOK_URL }
-  const webhook = env.STEP3 || env.PRIMARY
-  if (webhook) {
-    const payloadOut = {
-      event: 'quote_updated',
-      quote_id,
-      job_id: jobIdFromQuote(quote_id),
-      source_language: source_lang || '',
-      target_language: target_lang || '',
-      intended_use_id: intended_use_id || null,
-      source_code: source_code || null,
-      target_code: target_code || null,
-      country: country || '',
-      country_code: country_code || null
+  // Fire webhook only when step 3 fields are present
+  const hasStep3 = Boolean(
+    (source_lang && source_lang.trim()) ||
+    (target_lang && target_lang.trim()) ||
+    typeof intended_use_id === 'number' ||
+    (source_code && source_code.trim()) ||
+    (target_code && target_code.trim()) ||
+    (country && country.trim()) ||
+    (country_code && country_code.trim())
+  )
+  if (hasStep3) {
+    const env = { STEP3: process.env.N8N_STEP3_WEBHOOK_URL, PRIMARY: process.env.N8N_WEBHOOK_URL }
+    const webhook = env.STEP3 || env.PRIMARY
+    if (webhook) {
+      const payloadOut = {
+        event: 'quote_updated',
+        quote_id,
+        job_id: jobIdFromQuote(quote_id),
+        source_language: source_lang || '',
+        target_language: target_lang || '',
+        intended_use_id: typeof intended_use_id === 'number' ? intended_use_id : null,
+        source_code: source_code || null,
+        target_code: target_code || null,
+        country: country || '',
+        country_code: country_code || null
+      }
+      fetch(webhook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payloadOut) }).catch(()=>{})
     }
-    fetch(webhook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payloadOut) }).catch(()=>{})
   }
 
   return NextResponse.json({ ok: true, customer_id })
