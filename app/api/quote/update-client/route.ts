@@ -41,13 +41,16 @@ export async function POST(req: NextRequest) {
   const intended_use_id: number | undefined = typeof payload?.intended_use_id === 'number' ? payload.intended_use_id : (typeof payload?.intended_use_id === 'string' ? parseInt(payload.intended_use_id, 10) : undefined)
   const source_code: string | undefined = typeof payload?.source_code === 'string' ? payload.source_code : undefined
   const target_code: string | undefined = typeof payload?.target_code === 'string' ? payload.target_code : undefined
+  const country: string | undefined = typeof payload?.country === 'string' ? payload.country : undefined
+  const country_code: string | undefined = typeof payload?.country_code === 'string' ? payload.country_code : undefined
 
   const update: Record<string, any> = { status: 'submitted', name: client_name, email: client_email, client_email }
   if (typeof phone === 'string' && phone) update.phone = phone
   if (source_lang) update.source_lang = source_lang
   if (target_lang) update.target_lang = target_lang
   if (typeof intended_use === 'string') update.intended_use = intended_use
-  // Note: we intentionally do not write intended_use_id/source_code/target_code to DB to avoid schema mismatches
+  if (typeof country === 'string') update.country = country
+  // Note: we intentionally do not write intended_use_id/source_code/target_code/country_code to DB to avoid schema mismatches
 
   const { error } = await supabase
     .from('quote_submissions')
@@ -69,7 +72,9 @@ export async function POST(req: NextRequest) {
       target_language: target_lang || '',
       intended_use_id: intended_use_id || null,
       source_code: source_code || null,
-      target_code: target_code || null
+      target_code: target_code || null,
+      country: country || '',
+      country_code: country_code || null
     }
     fetch(webhook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payloadOut) }).catch(()=>{})
   }
