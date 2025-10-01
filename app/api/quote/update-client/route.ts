@@ -49,8 +49,7 @@ export async function POST(req: NextRequest) {
   if (source_lang) update.source_lang = source_lang
   if (target_lang) update.target_lang = target_lang
   if (typeof intended_use === 'string') update.intended_use = intended_use
-  if (typeof country === 'string') update.country = country
-  // Note: we intentionally do not write intended_use_id/source_code/target_code/country_code to DB to avoid schema mismatches
+  // Note: we intentionally do not write intended_use_id/source_code/target_code/country/country_code to DB to avoid schema mismatches
 
   const { error } = await supabase
     .from('quote_submissions')
