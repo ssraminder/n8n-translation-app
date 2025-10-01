@@ -28,6 +28,8 @@ export default function QuoteFlowPage() {
   const [overlayMode, setOverlayMode] = useState<'upload' | 'process'>('process')
   const [quoteId, setQuoteId] = useState<string | null>(null)
   const [pendingOtpCode, setPendingOtpCode] = useState<string>('')
+  const [sentOtp, setSentOtp] = useState<string>('')
+  const [otpMethod, setOtpMethod] = useState<'email'|'sms'>('email')
 
   const quote: QuoteDetails = useMemo(()=> ({
     price: 89.95,
@@ -141,6 +143,7 @@ export default function QuoteFlowPage() {
 
   async function verifyOtpAndProcess(code: string) {
     setPendingOtpCode(code)
+    if (code !== sentOtp) { alert('Invalid code, please try again.'); return }
     setOtpOpen(false)
     setStep(3)
   }
@@ -212,7 +215,9 @@ export default function QuoteFlowPage() {
                       source_lang: langs.source,
                       target_lang: targetText,
                       intended_use_id: langs.intended_use_id,
-                      intended_use: langs.purpose
+                      intended_use: langs.purpose,
+                      source_code: langs.source_code,
+                      target_code: langs.target_code
                     })
                   })
                   if (!res.ok) throw new Error('UPDATE_FAILED')
@@ -264,7 +269,35 @@ export default function QuoteFlowPage() {
 
       </div>
 
-      <OtpModal open={otpOpen} onVerify={(code)=>verifyOtpAndProcess(code)} onClose={()=> setOtpOpen(false)} onSend={async ()=>{}} onResend={async ()=>{}} />
+      <OtpModal
+        open={otpOpen}
+        onVerify={(code)=>verifyOtpAndProcess(code)}
+        onClose={()=> setOtpOpen(false)}
+        onSend={async (method)=>{
+          const gen = String(Math.floor(100000 + Math.random()*900000))
+          setSentOtp(gen)
+          setOtpMethod(method)
+          const to = method === 'email' ? details.email : details.phone
+          if (!to) { alert(method === 'email' ? 'Missing email' : 'Missing phone'); return }
+          const r = await fetch('/api/otp/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method, code: gen, to }) })
+          if (!r.ok) {
+            const t = await r.text().catch(()=>null)
+            alert('Failed to send code' + (t ? `: ${t.slice(0,120)}` : ''))
+          }
+        }}
+        onResend={async (method)=>{
+          const gen = String(Math.floor(100000 + Math.random()*900000))
+          setSentOtp(gen)
+          setOtpMethod(method)
+          const to = method === 'email' ? details.email : details.phone
+          if (!to) { alert(method === 'email' ? 'Missing email' : 'Missing phone'); return }
+          const r = await fetch('/api/otp/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method, code: gen, to }) })
+          if (!r.ok) {
+            const t = await r.text().catch(()=>null)
+            alert('Failed to resend code' + (t ? `: ${t.slice(0,120)}` : ''))
+          }
+        }}
+      />
       <ProcessingOverlay open={processingOpen} mode={overlayMode} onDone={()=> {}} />
     </div>
   )
