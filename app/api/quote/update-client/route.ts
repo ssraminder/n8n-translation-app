@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+function jobIdFromQuote(id: string) {
+  let h = 0 >>> 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+  const num = (h % 90000) + 10000
+  return `CS${num}`
+}
+
 export async function POST(req: NextRequest) {
   const payload = await req.json()
   const { quote_id, client_name, client_email, phone } = payload || {}
@@ -31,12 +38,16 @@ export async function POST(req: NextRequest) {
   const source_lang = typeof payload?.source_lang === 'string' ? payload.source_lang : undefined
   const target_lang = typeof payload?.target_lang === 'string' ? payload.target_lang : undefined
   const intended_use: string | undefined = typeof payload?.intended_use === 'string' ? payload.intended_use : undefined
+  const intended_use_id: number | undefined = typeof payload?.intended_use_id === 'number' ? payload.intended_use_id : (typeof payload?.intended_use_id === 'string' ? parseInt(payload.intended_use_id, 10) : undefined)
+  const source_code: string | undefined = typeof payload?.source_code === 'string' ? payload.source_code : undefined
+  const target_code: string | undefined = typeof payload?.target_code === 'string' ? payload.target_code : undefined
 
   const update: Record<string, any> = { status: 'submitted', name: client_name, email: client_email, client_email }
   if (typeof phone === 'string' && phone) update.phone = phone
   if (source_lang) update.source_lang = source_lang
   if (target_lang) update.target_lang = target_lang
   if (typeof intended_use === 'string') update.intended_use = intended_use
+  // Note: we intentionally do not write intended_use_id/source_code/target_code to DB to avoid schema mismatches
 
   const { error } = await supabase
     .from('quote_submissions')
@@ -45,5 +56,22 @@ export async function POST(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: 'DB_ERROR', details: error.message }, { status: 500 })
   }
+
+  // Fire webhook to n8n with updated selections
+  const webhook = process.env.N8N_WEBHOOK_URL
+  if (webhook) {
+    const payloadOut = {
+      event: 'quote_updated',
+      quote_id,
+      job_id: jobIdFromQuote(quote_id),
+      source_language: source_lang || '',
+      target_language: target_lang || '',
+      intended_use_id: intended_use_id || null,
+      source_code: source_code || null,
+      target_code: target_code || null
+    }
+    fetch(webhook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payloadOut) }).catch(()=>{})
+  }
+
   return NextResponse.json({ ok: true, customer_id })
 }
