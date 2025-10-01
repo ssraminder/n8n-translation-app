@@ -35,20 +35,28 @@ export async function POST(req: NextRequest) {
 
     if (method === 'sms') {
       const missing: string[] = []
+      const hasFrom = Boolean(env.TWILIO_FROM)
+      const hasService = Boolean(env.TWILIO_MESSAGING_SERVICE_SID)
       if (!env.TWILIO_ACCOUNT_SID) missing.push('TWILIO_ACCOUNT_SID')
       if (!env.TWILIO_AUTH_TOKEN) missing.push('TWILIO_AUTH_TOKEN')
-      if (!env.TWILIO_FROM) missing.push('TWILIO_FROM')
+      if (!hasFrom && !hasService) missing.push('TWILIO_FROM or TWILIO_MESSAGING_SERVICE_SID')
       if (missing.length) return NextResponse.json({ error: 'SMS_NOT_CONFIGURED', missing }, { status: 501 })
 
       const auth = Buffer.from(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`).toString('base64')
       const form = new URLSearchParams()
 
-      // Normalize From to E.164 if it's only digits and missing '+'
-      const from = String(env.TWILIO_FROM).trim()
-      const fromNormalized = from.startsWith('+') ? from : (/^\d+$/.test(from) ? `+${from}` : from)
+      // Use Messaging Service if provided; otherwise use From number (normalized)
+      if (hasService) {
+        form.append('MessagingServiceSid', String(env.TWILIO_MESSAGING_SERVICE_SID))
+      } else {
+        const from = String(env.TWILIO_FROM).trim()
+        const fromNormalized = from.startsWith('+') ? from : (/^\d+$/.test(from) ? `+${from}` : from)
+        form.append('From', fromNormalized)
+      }
 
-      form.append('From', fromNormalized)
-      form.append('To', to)
+      // Normalize To to E.164 if it's only digits and missing '+'
+      const toNormalized = to.startsWith('+') ? to : (/^\d+$/.test(to) ? `+${to}` : to)
+      form.append('To', toNormalized)
       form.append('Body', `Your verification code is ${code}`)
       const url = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`
       const res = await fetch(url, { method: 'POST', headers: { 'Authorization': `Basic ${auth}`, 'content-type': 'application/x-www-form-urlencoded' }, body: form.toString() })
