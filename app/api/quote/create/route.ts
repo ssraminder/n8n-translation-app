@@ -20,15 +20,8 @@ export async function POST() {
   const insertRow = {
     quote_id,
     job_id,
-    // DB requires non-null name/email in this project
     name: '',
-    email: '',
-    // Keep legacy fields too for compatibility
-    client_name: '',
-    client_email: '',
-    source_lang: '',
-    target_lang: '',
-    intended_use: ''
+    email: ''
   }
 
   const { error } = await client.from('quote_submissions').insert(insertRow)
