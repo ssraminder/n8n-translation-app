@@ -27,6 +27,7 @@ export async function POST() {
   const { error } = await client.from('quote_submissions').insert(insertRow)
 
   if (error) {
+    console.error('QUOTE_CREATE_DB_ERROR', { details: (error as any)?.message, code: (error as any)?.code })
     const msg = (error as any)?.message || 'Unknown error'
     return NextResponse.json({ error: 'DB_ERROR', details: msg }, { status: 500 })
   }
