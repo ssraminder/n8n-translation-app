@@ -73,34 +73,54 @@ export async function POST(req: NextRequest) {
     const env = { STEP3: process.env.N8N_STEP3_WEBHOOK_URL, PRIMARY: process.env.N8N_WEBHOOK_URL }
     const webhook = env.STEP3 || env.PRIMARY
     if (webhook) {
-      // Compute tier/multiplier from languages + tiers/languages_tier
+      // Compute tier/multiplier from languages (+ flexible columns) and tiers
       let tier_name: string | null = null
       let tier_multiplier: number | null = null
 
       try {
-        async function resolveLangTier(code?: string, name?: string) {
+        async function resolveLangTierFlexible(code?: string, name?: string) {
           const orParts: string[] = []
-          if (code && code.trim()) orParts.push(`code.eq.${code.trim()}`)
-          if (name && name.trim()) orParts.push(`name.eq.${name.trim()}`)
+          if (code && code.trim()) {
+            const c = code.trim()
+            orParts.push(`code.eq.${c}`, `iso_code.eq.${c}`, `lang_code.eq.${c}`)
+          }
+          if (name && name.trim()) {
+            const n = name.trim()
+            orParts.push(`name.eq.${n}`, `label.eq.${n}`, `language.eq.${n}`, `title.eq.${n}`)
+          }
           if (orParts.length === 0) return null as any
           const { data: langRow } = await supabase
             .from('languages')
-            .select('tier_id')
+            .select('*')
             .or(orParts.join(','))
             .limit(1)
             .maybeSingle()
           if (!langRow) return null as any
           const tid: number | null = typeof (langRow as any).tier_id === 'number' ? (langRow as any).tier_id : null
-          if (!tid) return null as any
-          const { data: tierRow } = await supabase
-            .from('tiers')
-            .select('name,multiplier')
-            .eq('id', tid)
-            .maybeSingle()
-          return tierRow as any
+          const tname: string | null = (langRow as any).tier_name || (langRow as any).tier || null
+          const directMult: number | null = typeof (langRow as any).multiplier === 'number' ? (langRow as any).multiplier : null
+          if (directMult !== null) return { name: tname, multiplier: directMult }
+          if (tid !== null) {
+            const { data: tierRow } = await supabase
+              .from('tiers')
+              .select('name,multiplier')
+              .eq('id', tid)
+              .maybeSingle()
+            if (tierRow) return tierRow as any
+          }
+          if (tname) {
+            const { data: tierRowByName } = await supabase
+              .from('tiers')
+              .select('name,multiplier')
+              .eq('name', tname)
+              .maybeSingle()
+            if (tierRowByName) return tierRowByName as any
+            return { name: tname, multiplier: null as any }
+          }
+          return null as any
         }
-        let tierRow = await resolveLangTier(source_code, source_lang)
-        if (!tierRow) tierRow = await resolveLangTier(target_code, target_lang)
+        let tierRow = await resolveLangTierFlexible(source_code, source_lang)
+        if (!tierRow) tierRow = await resolveLangTierFlexible(target_code, target_lang)
         if (tierRow) {
           tier_name = (tierRow as any).name ?? tier_name
           tier_multiplier = typeof (tierRow as any).multiplier === 'number' ? (tierRow as any).multiplier : tier_multiplier
@@ -166,6 +186,42 @@ export async function POST(req: NextRequest) {
         }
       } catch (_) {}
 
+      // Retry a few times if fields are still null before firing webhook
+      let attempts = 0
+      while (attempts < 3 && (tier_multiplier == null || cert_type_name == null || cert_type_rate == null)) {
+        attempts++
+        await new Promise(r => setTimeout(r, 200))
+        try {
+          // re-attempt language tier
+          if (tier_multiplier == null) {
+            let tr = await (async ()=>{
+              let t = await resolveLangTierFlexible(source_code, source_lang)
+              if (!t) t = await resolveLangTierFlexible(target_code, target_lang)
+              return t
+            })()
+            if (tr) {
+              tier_name = (tr as any).name ?? tier_name
+              tier_multiplier = typeof (tr as any).multiplier === 'number' ? (tr as any).multiplier : tier_multiplier
+            }
+          }
+          // re-attempt cert by intended_use text only
+          if ((cert_type_name == null || cert_type_rate == null) && typeof intended_use === 'string' && intended_use.trim()) {
+            const term = intended_use.trim()
+            const { data: cert } = await supabase
+              .from('cert_types')
+              .select('id,name,amount,pricing_type,multiplier,rate')
+              .ilike('name', `%${term}%`)
+              .limit(1)
+              .maybeSingle()
+            if (cert) {
+              cert_type_name = (cert as any).name ?? cert_type_name
+              const rate = typeof (cert as any).rate === 'number' ? (cert as any).rate : (typeof (cert as any).amount === 'number' ? (cert as any).amount : (typeof (cert as any).multiplier === 'number' ? (cert as any).multiplier : null))
+              cert_type_rate = rate ?? cert_type_rate
+            }
+          }
+        } catch (_) {}
+      }
+
       const payloadOut = {
         event: 'quote_updated',
         quote_id,
@@ -182,7 +238,32 @@ export async function POST(req: NextRequest) {
         cert_type_name: cert_type_name,
         cert_type_rate: cert_type_rate
       }
-      fetch(webhook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payloadOut) }).catch(()=>{})
+
+      if (tier_multiplier != null && cert_type_name != null && cert_type_rate != null) {
+        await fetch(webhook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payloadOut) })
+      } else {
+        try {
+          await supabase.from('quote_submissions').update({ hitl_requested: true }).eq('quote_id', quote_id)
+        } catch (_) {}
+        const hitlPayload: any = {
+          quote_id,
+          hitl_requested: true,
+          job_id: jobIdFromQuote(quote_id),
+          source_language: source_lang || '',
+          target_language: target_lang || '',
+          intended_use: typeof intended_use === 'string' ? intended_use : '',
+          country_of_issue: country || ''
+        }
+        try {
+          if (!hitlPayload.country_of_issue) {
+            const { data: res } = await supabase.from('quote_results').select('results_json').eq('quote_id', quote_id).maybeSingle()
+            hitlPayload.country_of_issue = (res as any)?.results_json?.country_of_issue || ''
+          }
+        } catch (_) {}
+        if (process.env.N8N_WEBHOOK_URL) {
+          await fetch(String(process.env.N8N_WEBHOOK_URL), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(hitlPayload) }).catch(()=>{})
+        }
+      }
     }
   }
 
