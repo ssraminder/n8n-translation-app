@@ -34,10 +34,20 @@ export async function POST(req: NextRequest) {
     }
 
     if (method === 'sms') {
-      if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN || !env.TWILIO_FROM) return NextResponse.json({ error: 'SMS_NOT_CONFIGURED' }, { status: 501 })
+      const missing: string[] = []
+      if (!env.TWILIO_ACCOUNT_SID) missing.push('TWILIO_ACCOUNT_SID')
+      if (!env.TWILIO_AUTH_TOKEN) missing.push('TWILIO_AUTH_TOKEN')
+      if (!env.TWILIO_FROM) missing.push('TWILIO_FROM')
+      if (missing.length) return NextResponse.json({ error: 'SMS_NOT_CONFIGURED', missing }, { status: 501 })
+
       const auth = Buffer.from(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`).toString('base64')
       const form = new URLSearchParams()
-      form.append('From', String(env.TWILIO_FROM))
+
+      // Normalize From to E.164 if it's only digits and missing '+'
+      const from = String(env.TWILIO_FROM).trim()
+      const fromNormalized = from.startsWith('+') ? from : (/^\d+$/.test(from) ? `+${from}` : from)
+
+      form.append('From', fromNormalized)
       form.append('To', to)
       form.append('Body', `Your verification code is ${code}`)
       const url = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`
