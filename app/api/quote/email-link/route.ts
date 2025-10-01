@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getEnv } from '@/src/lib/env'
+export const runtime = 'nodejs'
 export async function POST(req: NextRequest) {
   const { quote_id, to } = await req.json()
   if (!quote_id || !to) return NextResponse.json({ error: 'INVALID' }, { status: 400 })
