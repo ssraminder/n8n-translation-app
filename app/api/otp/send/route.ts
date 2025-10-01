@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getEnv } from '@/src/lib/env'
 
+export const runtime = 'nodejs'
+
 export async function POST(req: NextRequest) {
   const env = getEnv()
   const body = await req.json().catch(()=>null)
