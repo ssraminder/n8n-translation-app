@@ -73,6 +73,111 @@ export async function POST(req: NextRequest) {
     const env = { STEP3: process.env.N8N_STEP3_WEBHOOK_URL, PRIMARY: process.env.N8N_WEBHOOK_URL }
     const webhook = env.STEP3 || env.PRIMARY
     if (webhook) {
+      // Compute tier/multiplier from languages + tiers/languages_tier
+      let tier_name: string | null = null
+      let tier_multiplier: number | null = null
+
+      try {
+        // Attempt to resolve language by code or name with flexible columns
+        const orParts: string[] = []
+        if (source_code && source_code.trim()) {
+          const c = source_code.trim()
+          orParts.push(
+            `code.eq.${c}`,
+            `iso_code.eq.${c}`,
+            `lang_code.eq.${c}`
+          )
+        }
+        if (source_lang && source_lang.trim()) {
+          const n = source_lang.trim()
+          orParts.push(
+            `name.eq.${n}`,
+            `label.eq.${n}`,
+            `language.eq.${n}`,
+            `title.eq.${n}`
+          )
+        }
+        if (orParts.length > 0) {
+          const { data: langRow } = await supabase
+            .from('languages')
+            .select('*')
+            .or(orParts.join(','))
+            .limit(1)
+            .maybeSingle()
+
+          if (langRow) {
+            const langTierId: number | null = typeof (langRow as any).tier_id === 'number' ? (langRow as any).tier_id : null
+            const langTierName: string | null = (langRow as any).tier_name || (langRow as any).tier || null
+            const langMultiplier: number | null = typeof (langRow as any).multiplier === 'number' ? (langRow as any).multiplier : null
+            if (langMultiplier !== null) tier_multiplier = langMultiplier
+
+            async function tryFetchTier(table: string, by: 'id' | 'name', value: number | string) {
+              const sel = by === 'id' ? 'id,multiplier,name' : 'name,multiplier,id'
+              const q = supabase.from(table).select(sel)
+              const { data } = by === 'id'
+                ? await q.eq('id', value as number).maybeSingle()
+                : await q.eq('name', value as string).maybeSingle()
+              return data as any | null
+            }
+
+            if (tier_multiplier === null) {
+              if (langTierId !== null) {
+                let tierRow = await tryFetchTier('languages_tier', 'id', langTierId)
+                if (!tierRow) tierRow = await tryFetchTier('tiers', 'id', langTierId)
+                if (tierRow) {
+                  tier_multiplier = typeof tierRow.multiplier === 'number' ? tierRow.multiplier : (tierRow.amount ?? null)
+                  tier_name = tierRow.name ?? tier_name
+                }
+              } else if (langTierName) {
+                let tierRow = await tryFetchTier('languages_tier', 'name', langTierName)
+                if (!tierRow) tierRow = await tryFetchTier('tiers', 'name', langTierName)
+                if (tierRow) {
+                  tier_multiplier = typeof tierRow.multiplier === 'number' ? tierRow.multiplier : (tierRow.amount ?? null)
+                  tier_name = tierRow.name ?? langTierName
+                } else {
+                  tier_name = langTierName
+                }
+              }
+            }
+            if (!tier_name && (langTierName || (langRow as any).tier)) {
+              tier_name = langTierName || (langRow as any).tier || null
+            }
+          }
+        }
+      } catch (_) {}
+
+      // Compute cert type name + rate from intended_use_id → intended_use_cert_map → cert_type(s)
+      let cert_type_name: string | null = null
+      let cert_type_rate: number | null = null
+      try {
+        if (typeof intended_use_id === 'number') {
+          // map to cert type id
+          const { data: mapRow } = await supabase
+            .from('intended_use_cert_map')
+            .select('*')
+            .eq('intended_use_id', intended_use_id)
+            .maybeSingle()
+          const certTypeId: number | string | null = mapRow ? ((mapRow as any).cert_type_id ?? (mapRow as any).cert_type ?? null) : null
+
+          async function fetchCert(table: string, idOrName: number | string) {
+            const byId = typeof idOrName === 'number'
+            const sel = 'id,name,rate,amount,multiplier'
+            const q = supabase.from(table).select(sel)
+            const { data } = byId ? await q.eq('id', idOrName as number).maybeSingle() : await q.eq('name', idOrName as string).maybeSingle()
+            return data as any | null
+          }
+
+          if (certTypeId !== null) {
+            let cert = await fetchCert('cert_type', certTypeId)
+            if (!cert) cert = await fetchCert('cert_types', certTypeId)
+            if (cert) {
+              cert_type_name = cert.name ?? null
+              cert_type_rate = typeof cert.rate === 'number' ? cert.rate : (typeof cert.amount === 'number' ? cert.amount : (typeof cert.multiplier === 'number' ? cert.multiplier : null))
+            }
+          }
+        }
+      } catch (_) {}
+
       const payloadOut = {
         event: 'quote_updated',
         quote_id,
@@ -83,7 +188,11 @@ export async function POST(req: NextRequest) {
         source_code: source_code || null,
         target_code: target_code || null,
         country: country || '',
-        country_code: country_code || null
+        country_code: country_code || null,
+        tier: tier_name,
+        tier_multiplier: tier_multiplier,
+        cert_type_name: cert_type_name,
+        cert_type_rate: cert_type_rate
       }
       fetch(webhook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payloadOut) }).catch(()=>{})
     }
