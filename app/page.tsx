@@ -6,7 +6,6 @@ import { FileUploadArea } from '@/components/FileUploadArea'
 import { UploadedFilesList } from '@/components/UploadedFilesList'
 import { LanguageSelects, type LanguageState } from '@/components/LanguageSelects'
 import { ClientDetails, ClientDetailsForm } from '@/components/ClientDetailsForm'
-import { OtpModal } from '@/components/OtpModal'
 import { ProcessingOverlay } from '@/components/ProcessingOverlay'
 import { QuoteDetails, QuoteReviewCard } from '@/components/QuoteReviewCard'
 import { OrderOptions, OrderOptionsForm } from '@/components/OrderOptionsForm'
@@ -23,14 +22,9 @@ export default function QuoteFlowPage() {
   const [files, setFiles] = useState<File[]>([])
   const [langs, setLangs] = useState<LanguageState>({ source: '', target: '', purpose: '', country: '', targetOther: '' })
   const [details, setDetails] = useState<ClientDetails>({ fullName: '', email: '', phone: '', orderType: 'personal' })
-  const [otpOpen, setOtpOpen] = useState(false)
   const [processingOpen, setProcessingOpen] = useState(false)
   const [overlayMode, setOverlayMode] = useState<'upload' | 'process'>('process')
   const [quoteId, setQuoteId] = useState<string | null>(null)
-  const [pendingOtpCode, setPendingOtpCode] = useState<string>('')
-  const [sentOtp, setSentOtp] = useState<string>('')
-  const [otpMethod, setOtpMethod] = useState<'email'|'sms'>('email')
-  const [otpAvail, setOtpAvail] = useState<{ email: boolean; sms: boolean }>({ email: true, sms: false })
 
   const quote: QuoteDetails = useMemo(()=> ({
     price: 89.95,
@@ -122,14 +116,6 @@ export default function QuoteFlowPage() {
     }
   }
 
-  useEffect(() => {
-    fetch('/api/otp/config').then(async (r)=>{
-      if (r.ok) {
-        const j = await r.json()
-        setOtpAvail({ email: !!j.email, sms: !!j.sms })
-      }
-    }).catch(()=>{})
-  }, [])
 
   async function runQuoteFlow() {
     if (!quoteId) { alert('Please start by uploading files in Step 1.'); setStep(1); return }
@@ -143,7 +129,7 @@ export default function QuoteFlowPage() {
       })
       if (!submitRes.ok) throw new Error('UPDATE_CLIENT_FAILED')
       setProcessingOpen(false)
-      setOtpOpen(true)
+      setStep(3)
     } catch (e) {
       console.error(e)
       setProcessingOpen(false)
@@ -151,12 +137,6 @@ export default function QuoteFlowPage() {
     }
   }
 
-  async function verifyOtpAndProcess(code: string) {
-    setPendingOtpCode(code)
-    if (code !== sentOtp) { alert('Invalid code, please try again.'); return }
-    setOtpOpen(false)
-    setStep(3)
-  }
 
   return (
     <div>
@@ -210,7 +190,7 @@ export default function QuoteFlowPage() {
               className="mt-8 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
               onClick={async ()=>{
                 if (!quoteId) { alert('Missing quote. Please start again.'); setStep(1); return }
-                if (!langs.source || !(langs.target || langs.targetOther) || !langs.purpose) { alert('Please select source, target, and intended use.'); return }
+                if (!langs.source || !(langs.target || langs.targetOther) || !langs.purpose || !langs.country_code) { alert('Please select source, target, intended use, and country of issue.'); return }
                 const targetText = langs.target === 'Other' ? (langs.targetOther || '') : langs.target
                 try {
                   setOverlayMode('process')
@@ -227,7 +207,9 @@ export default function QuoteFlowPage() {
                       intended_use_id: langs.intended_use_id,
                       intended_use: langs.purpose,
                       source_code: langs.source_code,
-                      target_code: langs.target_code
+                      target_code: langs.target_code,
+                      country: langs.country,
+                      country_code: langs.country_code
                     })
                   })
                   if (!res.ok) throw new Error('UPDATE_FAILED')
@@ -279,37 +261,6 @@ export default function QuoteFlowPage() {
 
       </div>
 
-      <OtpModal
-        open={otpOpen}
-        emailEnabled={otpAvail.email}
-        smsEnabled={otpAvail.sms}
-        onVerify={(code)=>verifyOtpAndProcess(code)}
-        onClose={()=> setOtpOpen(false)}
-        onSend={async (method)=>{
-          const gen = String(Math.floor(100000 + Math.random()*900000))
-          setSentOtp(gen)
-          setOtpMethod(method)
-          const to = method === 'email' ? details.email : details.phone
-          if (!to) { alert(method === 'email' ? 'Missing email' : 'Missing phone'); return }
-          const r = await fetch('/api/otp/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method, code: gen, to }) })
-          if (!r.ok) {
-            const t = await r.text().catch(()=>null)
-            alert('Failed to send code' + (t ? `: ${t.slice(0,120)}` : ''))
-          }
-        }}
-        onResend={async (method)=>{
-          const gen = String(Math.floor(100000 + Math.random()*900000))
-          setSentOtp(gen)
-          setOtpMethod(method)
-          const to = method === 'email' ? details.email : details.phone
-          if (!to) { alert(method === 'email' ? 'Missing email' : 'Missing phone'); return }
-          const r = await fetch('/api/otp/send', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method, code: gen, to }) })
-          if (!r.ok) {
-            const t = await r.text().catch(()=>null)
-            alert('Failed to resend code' + (t ? `: ${t.slice(0,120)}` : ''))
-          }
-        }}
-      />
       <ProcessingOverlay open={processingOpen} mode={overlayMode} onDone={()=> {}} />
     </div>
   )

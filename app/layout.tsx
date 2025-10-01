@@ -8,8 +8,8 @@ const SENTRY_DSN = process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN 
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="body-wrapper">
+    <html lang="en" suppressHydrationWarning>
+      <body className="body-wrapper" suppressHydrationWarning>
         <Script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" strategy="afterInteractive" />
         {SENTRY_DSN ? (
           <>
