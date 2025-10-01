@@ -18,7 +18,7 @@ export async function POST() {
   const job_id = jobIdFromQuote(quote_id)
   const { error } = await client
     .from('quote_submissions')
-    .insert({ quote_id, job_id, name: '', email: '' })
+    .insert({ quote_id, job_id, client_name: '', client_email: '' })
 
   if (error) {
     const msg = (error as any)?.message || 'Unknown error'
