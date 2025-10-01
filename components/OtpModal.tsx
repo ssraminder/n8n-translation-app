@@ -3,12 +3,14 @@ import { useEffect, useRef, useState } from 'react'
 
 type OtpMethod = 'email' | 'sms'
 
-export function OtpModal({ open, onVerify, onClose, onSend, onResend }: {
+export function OtpModal({ open, onVerify, onClose, onSend, onResend, emailEnabled = true, smsEnabled = true }: {
   open: boolean
   onVerify: (code: string) => void
   onClose: () => void
   onSend: (method: OtpMethod) => Promise<void> | void
   onResend: (method: OtpMethod) => Promise<void> | void
+  emailEnabled?: boolean
+  smsEnabled?: boolean
 }) {
   const inputsRef = useRef<Array<HTMLInputElement | null>>([])
   const [digits, setDigits] = useState<string[]>(['', '', '', '', '', ''])
@@ -20,9 +22,10 @@ export function OtpModal({ open, onVerify, onClose, onSend, onResend }: {
     if (open) {
       setDigits(['', '', '', '', '', ''])
       setStage('choose')
-      setMethod('email')
+      const defaultMethod: OtpMethod = emailEnabled ? 'email' : 'sms'
+      setMethod(defaultMethod)
     }
-  }, [open])
+  }, [open, emailEnabled])
 
   useEffect(() => {
     if (stage === 'enter') {
@@ -65,28 +68,32 @@ export function OtpModal({ open, onVerify, onClose, onSend, onResend }: {
           <div>
             <p className="text-gray-600 mb-4">Choose how you want to receive your 6-digit code.</p>
             <div className="space-y-3">
-              <label className="flex items-center gap-3 p-3 border rounded-md cursor-pointer hover:bg-gray-50">
-                <input
-                  type="radio"
-                  name="otp-method"
-                  value="email"
-                  checked={method === 'email'}
-                  onChange={() => setMethod('email')}
-                  className="h-4 w-4"
-                />
-                <span className="text-gray-800">Email</span>
-              </label>
-              <label className="flex items-center gap-3 p-3 border rounded-md cursor-pointer hover:bg-gray-50">
-                <input
-                  type="radio"
-                  name="otp-method"
-                  value="sms"
-                  checked={method === 'sms'}
-                  onChange={() => setMethod('sms')}
-                  className="h-4 w-4"
-                />
-                <span className="text-gray-800">Text message (SMS)</span>
-              </label>
+              {emailEnabled && (
+                <label className="flex items-center gap-3 p-3 border rounded-md cursor-pointer hover:bg-gray-50">
+                  <input
+                    type="radio"
+                    name="otp-method"
+                    value="email"
+                    checked={method === 'email'}
+                    onChange={() => setMethod('email')}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-gray-800">Email</span>
+                </label>
+              )}
+              {smsEnabled && (
+                <label className="flex items-center gap-3 p-3 border rounded-md cursor-pointer hover:bg-gray-50">
+                  <input
+                    type="radio"
+                    name="otp-method"
+                    value="sms"
+                    checked={method === 'sms'}
+                    onChange={() => setMethod('sms')}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-gray-800">Text message (SMS)</span>
+                </label>
+              )}
             </div>
             <div className="flex space-x-3 mt-6">
               <button
