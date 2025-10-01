@@ -78,71 +78,32 @@ export async function POST(req: NextRequest) {
       let tier_multiplier: number | null = null
 
       try {
-        // Attempt to resolve language by code or name with flexible columns
-        const orParts: string[] = []
-        if (source_code && source_code.trim()) {
-          const c = source_code.trim()
-          orParts.push(
-            `code.eq.${c}`,
-            `iso_code.eq.${c}`,
-            `lang_code.eq.${c}`
-          )
-        }
-        if (source_lang && source_lang.trim()) {
-          const n = source_lang.trim()
-          orParts.push(
-            `name.eq.${n}`,
-            `label.eq.${n}`,
-            `language.eq.${n}`,
-            `title.eq.${n}`
-          )
-        }
-        if (orParts.length > 0) {
+        async function resolveLangTier(code?: string, name?: string) {
+          const orParts: string[] = []
+          if (code && code.trim()) orParts.push(`code.eq.${code.trim()}`)
+          if (name && name.trim()) orParts.push(`name.eq.${name.trim()}`)
+          if (orParts.length === 0) return null as any
           const { data: langRow } = await supabase
             .from('languages')
-            .select('*')
+            .select('tier_id')
             .or(orParts.join(','))
             .limit(1)
             .maybeSingle()
-
-          if (langRow) {
-            const langTierId: number | null = typeof (langRow as any).tier_id === 'number' ? (langRow as any).tier_id : null
-            const langTierName: string | null = (langRow as any).tier_name || (langRow as any).tier || null
-            const langMultiplier: number | null = typeof (langRow as any).multiplier === 'number' ? (langRow as any).multiplier : null
-            if (langMultiplier !== null) tier_multiplier = langMultiplier
-
-            async function tryFetchTier(table: string, by: 'id' | 'name', value: number | string) {
-              const sel = by === 'id' ? 'id,multiplier,name' : 'name,multiplier,id'
-              const q = supabase.from(table).select(sel)
-              const { data } = by === 'id'
-                ? await q.eq('id', value as number).maybeSingle()
-                : await q.eq('name', value as string).maybeSingle()
-              return data as any | null
-            }
-
-            if (tier_multiplier === null) {
-              if (langTierId !== null) {
-                let tierRow = await tryFetchTier('languages_tier', 'id', langTierId)
-                if (!tierRow) tierRow = await tryFetchTier('tiers', 'id', langTierId)
-                if (tierRow) {
-                  tier_multiplier = typeof tierRow.multiplier === 'number' ? tierRow.multiplier : (tierRow.amount ?? null)
-                  tier_name = tierRow.name ?? tier_name
-                }
-              } else if (langTierName) {
-                let tierRow = await tryFetchTier('languages_tier', 'name', langTierName)
-                if (!tierRow) tierRow = await tryFetchTier('tiers', 'name', langTierName)
-                if (tierRow) {
-                  tier_multiplier = typeof tierRow.multiplier === 'number' ? tierRow.multiplier : (tierRow.amount ?? null)
-                  tier_name = tierRow.name ?? langTierName
-                } else {
-                  tier_name = langTierName
-                }
-              }
-            }
-            if (!tier_name && (langTierName || (langRow as any).tier)) {
-              tier_name = langTierName || (langRow as any).tier || null
-            }
-          }
+          if (!langRow) return null as any
+          const tid: number | null = typeof (langRow as any).tier_id === 'number' ? (langRow as any).tier_id : null
+          if (!tid) return null as any
+          const { data: tierRow } = await supabase
+            .from('tiers')
+            .select('name,multiplier')
+            .eq('id', tid)
+            .maybeSingle()
+          return tierRow as any
+        }
+        let tierRow = await resolveLangTier(source_code, source_lang)
+        if (!tierRow) tierRow = await resolveLangTier(target_code, target_lang)
+        if (tierRow) {
+          tier_name = (tierRow as any).name ?? tier_name
+          tier_multiplier = typeof (tierRow as any).multiplier === 'number' ? (tierRow as any).multiplier : tier_multiplier
         }
       } catch (_) {}
 
@@ -151,29 +112,56 @@ export async function POST(req: NextRequest) {
       let cert_type_rate: number | null = null
       try {
         if (typeof intended_use_id === 'number') {
-          // map to cert type id
           const { data: mapRow } = await supabase
             .from('intended_use_cert_map')
             .select('*')
             .eq('intended_use_id', intended_use_id)
             .maybeSingle()
           const certTypeId: number | string | null = mapRow ? ((mapRow as any).cert_type_id ?? (mapRow as any).cert_type ?? null) : null
-
-          async function fetchCert(table: string, idOrName: number | string) {
-            const byId = typeof idOrName === 'number'
-            const sel = 'id,name,rate,amount,multiplier'
-            const q = supabase.from(table).select(sel)
-            const { data } = byId ? await q.eq('id', idOrName as number).maybeSingle() : await q.eq('name', idOrName as string).maybeSingle()
-            return data as any | null
-          }
-
           if (certTypeId !== null) {
-            let cert = await fetchCert('cert_type', certTypeId)
-            if (!cert) cert = await fetchCert('cert_types', certTypeId)
-            if (cert) {
-              cert_type_name = cert.name ?? null
-              cert_type_rate = typeof cert.rate === 'number' ? cert.rate : (typeof cert.amount === 'number' ? cert.amount : (typeof cert.multiplier === 'number' ? cert.multiplier : null))
+            if (typeof certTypeId === 'number') {
+              const { data: cert } = await supabase
+                .from('cert_types')
+                .select('id,name,amount,pricing_type,multiplier,rate')
+                .eq('id', certTypeId)
+                .maybeSingle()
+              if (cert) {
+                cert_type_name = (cert as any).name ?? null
+                cert_type_rate = typeof (cert as any).rate === 'number' ? (cert as any).rate : (typeof (cert as any).amount === 'number' ? (cert as any).amount : (typeof (cert as any).multiplier === 'number' ? (cert as any).multiplier : null))
+              }
+            } else {
+              const { data: cert } = await supabase
+                .from('cert_types')
+                .select('id,name,amount,pricing_type,multiplier,rate')
+                .eq('name', String(certTypeId))
+                .maybeSingle()
+              if (cert) {
+                cert_type_name = (cert as any).name ?? null
+                cert_type_rate = typeof (cert as any).rate === 'number' ? (cert as any).rate : (typeof (cert as any).amount === 'number' ? (cert as any).amount : (typeof (cert as any).multiplier === 'number' ? (cert as any).multiplier : null))
+              }
             }
+          }
+        }
+        if (!cert_type_name && typeof intended_use === 'string' && intended_use.trim()) {
+          const term = intended_use.trim()
+          let { data: certByName } = await supabase
+            .from('cert_types')
+            .select('id,name,amount,pricing_type,multiplier,rate')
+            .ilike('name', term)
+            .maybeSingle()
+          if (!certByName) {
+            const like = term.includes('cert') ? '%cert%' : `%${term}%`
+            const { data } = await supabase
+              .from('cert_types')
+              .select('id,name,amount,pricing_type,multiplier,rate')
+              .ilike('name', like)
+              .limit(1)
+              .maybeSingle()
+            certByName = data as any
+          }
+          if (certByName) {
+            cert_type_name = (certByName as any).name ?? null
+            cert_type_rate = typeof (certByName as any).rate === 'number' ? (certByName as any).rate : (typeof (certByName as any).amount === 'number' ? (certByName as any).amount : (typeof (certByName as any).multiplier === 'number' ? (certByName as any).multiplier : null))
           }
         }
       } catch (_) {}
