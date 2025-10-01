@@ -241,6 +241,28 @@ export async function POST(req: NextRequest) {
 
       if (tier_multiplier != null && cert_type_name != null && cert_type_rate != null) {
         await fetch(webhook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payloadOut) })
+      } else {
+        try {
+          await supabase.from('quote_submissions').update({ hitl_requested: true }).eq('quote_id', quote_id)
+        } catch (_) {}
+        const hitlPayload: any = {
+          quote_id,
+          hitl_requested: true,
+          job_id: jobIdFromQuote(quote_id),
+          source_language: source_lang || '',
+          target_language: target_lang || '',
+          intended_use: typeof intended_use === 'string' ? intended_use : '',
+          country_of_issue: country || ''
+        }
+        try {
+          if (!hitlPayload.country_of_issue) {
+            const { data: res } = await supabase.from('quote_results').select('results_json').eq('quote_id', quote_id).maybeSingle()
+            hitlPayload.country_of_issue = (res as any)?.results_json?.country_of_issue || ''
+          }
+        } catch (_) {}
+        if (process.env.N8N_WEBHOOK_URL) {
+          await fetch(String(process.env.N8N_WEBHOOK_URL), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(hitlPayload) }).catch(()=>{})
+        }
       }
     }
   }
