@@ -190,7 +190,7 @@ export default function QuoteFlowPage() {
               className="mt-8 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
               onClick={async ()=>{
                 if (!quoteId) { alert('Missing quote. Please start again.'); setStep(1); return }
-                if (!langs.source || !(langs.target || langs.targetOther) || !langs.purpose) { alert('Please select source, target, and intended use.'); return }
+                if (!langs.source || !(langs.target || langs.targetOther) || !langs.purpose || !langs.country_code) { alert('Please select source, target, intended use, and country of issue.'); return }
                 const targetText = langs.target === 'Other' ? (langs.targetOther || '') : langs.target
                 try {
                   setOverlayMode('process')
