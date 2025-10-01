@@ -1,5 +1,5 @@
 "use client"
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProgressBar, StepIndex } from '@/components/ProgressBar'
 import { FileUploadArea } from '@/components/FileUploadArea'
@@ -30,6 +30,7 @@ export default function QuoteFlowPage() {
   const [pendingOtpCode, setPendingOtpCode] = useState<string>('')
   const [sentOtp, setSentOtp] = useState<string>('')
   const [otpMethod, setOtpMethod] = useState<'email'|'sms'>('email')
+  const [otpAvail, setOtpAvail] = useState<{ email: boolean; sms: boolean }>({ email: true, sms: false })
 
   const quote: QuoteDetails = useMemo(()=> ({
     price: 89.95,
@@ -120,6 +121,15 @@ export default function QuoteFlowPage() {
       alert('There was a problem uploading your files. Please try again.')
     }
   }
+
+  useEffect(() => {
+    fetch('/api/otp/config').then(async (r)=>{
+      if (r.ok) {
+        const j = await r.json()
+        setOtpAvail({ email: !!j.email, sms: !!j.sms })
+      }
+    }).catch(()=>{})
+  }, [])
 
   async function runQuoteFlow() {
     if (!quoteId) { alert('Please start by uploading files in Step 1.'); setStep(1); return }
@@ -271,6 +281,8 @@ export default function QuoteFlowPage() {
 
       <OtpModal
         open={otpOpen}
+        emailEnabled={otpAvail.email}
+        smsEnabled={otpAvail.sms}
         onVerify={(code)=>verifyOtpAndProcess(code)}
         onClose={()=> setOtpOpen(false)}
         onSend={async (method)=>{
