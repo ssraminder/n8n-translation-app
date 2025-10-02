@@ -184,10 +184,6 @@ export default function QuoteFlowPage() {
       const filesJson = await filesRes.json()
       setQuoteId(quote_id)
       setProcessingOpen(false)
-      setStep2SavedKey(null)
-      setStep2Error(null)
-      step2RequestActive.current = false
-      setPollingStarted(false)
       setDebugInfo(null)
       if (filesJson?.webhook === 'failed') {
         alert('Your files were saved, but processing was not triggered yet. We will retry shortly.')
