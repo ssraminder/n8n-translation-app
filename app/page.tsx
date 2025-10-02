@@ -129,30 +129,6 @@ export default function QuoteFlowPage() {
     })()
   }, [pollingStarted, quoteId, router])
 
-  useEffect(() => {
-    if (step !== 2) return
-    if (!step2Payload || !step2PayloadKey) {
-      setStep2Error(null)
-      if (step2SavedKey) setStep2SavedKey(null)
-      return
-    }
-    if (step2SavedKey === step2PayloadKey || step2RequestActive.current) return
-    step2RequestActive.current = true
-    setStep2Saving(true)
-    setStep2Error(null)
-    ;(async () => {
-      try {
-        await callUpdateClient(step2Payload, { suppressAlert: true })
-        setStep2SavedKey(step2PayloadKey)
-        setStep2Error(null)
-      } catch {
-        setStep2Error('Unable to save selections automatically. Please click Continue.')
-      } finally {
-        step2RequestActive.current = false
-        setStep2Saving(false)
-      }
-    })()
-  }, [step, step2Payload, step2PayloadKey, step2SavedKey, callUpdateClient])
 
   const quote: QuoteDetails = useMemo(()=> ({
     price: 89.95,
