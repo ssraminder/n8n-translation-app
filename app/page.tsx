@@ -218,21 +218,26 @@ export default function QuoteFlowPage() {
                   // Wait up to 30s for quote readiness
                   const start = Date.now()
                   let ready = false
-                  while (Date.now() - start < 30000) {
-                    await new Promise(r=>setTimeout(r, 2000))
+                  const timeoutMs = 45000
+                  const intervalMs = 5000
+                  const start = Date.now()
+                  let ready = false
+                  // Immediate check + poll
+                  for (;;) {
                     const st = await fetch(`/api/quote/status/${quoteId}`)
                     if (st.ok) {
-                      const { stage } = await st.json()
-                      if (stage === 'ready' || stage === 'calculated') { ready = true; break }
+                      const { n8n_status, stage } = await st.json()
+                      if (n8n_status === 'ready' || stage === 'ready' || stage === 'calculated') { ready = true; break }
                     }
+                    if (Date.now() - start >= timeoutMs) break
+                    await new Promise(r=>setTimeout(r, intervalMs))
                   }
                   if (ready) {
                     router.push(`/quote/${quoteId}`)
                   } else {
-                    // Request HITL and inform user
                     await fetch('/api/quote/request-hitl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quote_id: quoteId }) })
                     setProcessingOpen(false)
-                    alert('Your quote is taking longer than expected. A specialist will review it and email you shortly. You can also check your profile later to review your quote.')
+                    alert('Your quote is taking longer than expected. Our team will get back to you shortly.')
                   }
                 } catch (e) {
                   console.error(e)
