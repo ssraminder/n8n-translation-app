@@ -25,6 +25,7 @@ export default function QuoteFlowPage() {
   const [processingOpen, setProcessingOpen] = useState(false)
   const [overlayMode, setOverlayMode] = useState<'upload' | 'process'>('process')
   const [quoteId, setQuoteId] = useState<string | null>(null)
+  const [jobId, setJobId] = useState<string | null>(null)
   const [debugInfo, setDebugInfo] = useState<any | null>(null)
   const [step2Saving, setStep2Saving] = useState(false)
   const [step2Error, setStep2Error] = useState<string | null>(null)
