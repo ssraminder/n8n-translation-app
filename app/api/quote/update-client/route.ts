@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 function jobIdFromQuote(id: string) {
@@ -64,238 +64,218 @@ export async function POST(req: NextRequest) {
     customer_id = null
   }
 
-  // Optional selections from step 3
-  const source_lang = typeof payload?.source_lang === 'string' ? payload.source_lang : undefined
-  const target_lang = typeof payload?.target_lang === 'string' ? payload.target_lang : undefined
-  const intended_use: string | undefined = typeof payload?.intended_use === 'string' ? payload.intended_use : undefined
-  const intended_use_id: number | undefined = typeof payload?.intended_use_id === 'number' ? payload.intended_use_id : (typeof payload?.intended_use_id === 'string' ? parseInt(payload.intended_use_id, 10) : undefined)
-  const source_code: string | undefined = typeof payload?.source_code === 'string' ? payload.source_code : undefined
-  const target_code: string | undefined = typeof payload?.target_code === 'string' ? payload.target_code : undefined
-  const country: string | undefined = typeof payload?.country === 'string' ? payload.country : undefined
-  const country_code: string | undefined = typeof payload?.country_code === 'string' ? payload.country_code : undefined
+  const { data: existingSubmission } = await supabase
+    .from('quote_submissions')
+    .select('status,name,email,client_email,phone,source_lang,target_lang,intended_use,intended_use_id,source_code,target_code,country_of_issue,country_code,base_rate,tier_name,tier_multiplier,language_tier,language_tier_multiplier,cert_type_name,cert_type_amount,cert_type_rate,job_id,cert_type_code')
+    .eq('quote_id', quote_id)
+    .maybeSingle()
 
-  const update: Record<string, any> = {}
-  if (typeof client_name === 'string' && client_name && typeof client_email === 'string' && client_email) {
-    update.status = 'submitted'
-    update.name = client_name
-    update.email = client_email
-    update.client_email = client_email
+  if (!existingSubmission) {
+    return NextResponse.json({ error: 'QUOTE_NOT_FOUND' }, { status: 404 })
   }
-  if (typeof phone === 'string' && phone) update.phone = phone
-  if (source_lang) update.source_lang = source_lang
-  if (target_lang) update.target_lang = target_lang
-  if (typeof intended_use === 'string') update.intended_use = intended_use
-  if (typeof country === 'string' && country) update.country_of_issue = country
-  if (typeof intended_use_id === 'number' && Number.isFinite(intended_use_id)) update.intended_use_id = intended_use_id
-  if (typeof source_code === 'string' && source_code) update.source_code = source_code
-  if (typeof target_code === 'string' && target_code) update.target_code = target_code
-  if (typeof country_code === 'string' && country_code) update.country_code = country_code
+
+  const existingRow = existingSubmission as any
+  const payloadInputs = (typeof payload?.inputs === 'object' && payload.inputs) ? payload.inputs : undefined
+  const payloadResolved = (typeof payload?.resolved === 'object' && payload.resolved) ? payload.resolved : undefined
+
+  const finalName = stringOrNull(client_name, existingRow?.name)
+  const finalEmail = stringOrNull(client_email, existingRow?.email, existingRow?.client_email)
+  const finalPhone = stringOrNull(phone, existingRow?.phone)
+
+  const finalSourceLang = stringOrNull(payload?.source_lang, payloadInputs?.source_lang, existingRow?.source_lang)
+  const finalTargetLang = stringOrNull(payload?.target_lang, payloadInputs?.target_lang, existingRow?.target_lang)
+  const finalIntendedUse = stringOrNull(payload?.intended_use, payloadInputs?.intended_use, existingRow?.intended_use)
+  const intendedUseIdCandidate = numberOrNull(payload?.intended_use_id, payloadInputs?.intended_use_id, existingRow?.intended_use_id)
+  const finalIntendedUseId = typeof intendedUseIdCandidate === 'number' ? intendedUseIdCandidate : null
+  const finalSourceCode = stringOrNull(payload?.source_code, payloadInputs?.source_code, existingRow?.source_code)
+  const finalTargetCode = stringOrNull(payload?.target_code, payloadInputs?.target_code, existingRow?.target_code)
+  let finalCountry = stringOrNull(payload?.country, payloadInputs?.country, existingRow?.country_of_issue) ?? null
+  const finalCountryCode = stringOrNull(payload?.country_code, payloadInputs?.country_code, existingRow?.country_code)
+
+  let tierName = stringOrNull(payloadResolved?.tier_name, existingRow?.tier_name, existingRow?.language_tier) ?? null
+  let tierMultiplier = numberOrNull(payloadResolved?.tier_multiplier, existingRow?.tier_multiplier, existingRow?.language_tier_multiplier) ?? null
+  let certTypeName = stringOrNull(payloadResolved?.cert_type_name, existingRow?.cert_type_name) ?? null
+  let certTypeRate = numberOrNull(payloadResolved?.cert_type_rate, existingRow?.cert_type_rate, existingRow?.cert_type_amount) ?? null
+  let certTypeCode = stringOrNull(payloadResolved?.cert_type_code, existingRow?.cert_type_code) ?? null
+  let storedBaseRate = numberOrNull(payload?.base_rate, payloadResolved?.base_rate, existingRow?.base_rate, baseRate) ?? baseRate
+
+  async function resolveLangTierFlexible(code?: string | null, name?: string | null) {
+    if (code && code.trim()) {
+      const { data: byCode } = await supabase.from('languages').select('*').eq('iso_code', code.trim()).maybeSingle()
+      if (byCode) {
+        const tname = (byCode as any).tier || null
+        if (tname) {
+          const { data: tierRow } = await supabase.from('language_tiers').select('name,multiplier').eq('name', tname).maybeSingle()
+          if (tierRow) return tierRow as any
+          return { name: tname, multiplier: null as any }
+        }
+      }
+    }
+    if (name && name.trim()) {
+      const { data: byName } = await supabase.from('languages').select('*').ilike('language', name.trim()).maybeSingle()
+      if (byName) {
+        const tname = (byName as any).tier || null
+        if (tname) {
+          const { data: tierRow } = await supabase.from('language_tiers').select('name,multiplier').eq('name', tname).maybeSingle()
+          if (tierRow) return tierRow as any
+          return { name: tname, multiplier: null as any }
+        }
+      }
+    }
+    return null as any
+  }
+
+  try {
+    if (!tierName || tierMultiplier === null) {
+      const srcTier = await resolveLangTierFlexible(finalSourceCode, finalSourceLang)
+      const tgtTier = await resolveLangTierFlexible(finalTargetCode, finalTargetLang)
+      const candidates: { name: string | null; multiplier: number | null }[] = []
+      if (srcTier) candidates.push({ name: (srcTier as any).name ?? null, multiplier: typeof (srcTier as any).multiplier === 'number' ? (srcTier as any).multiplier : null })
+      if (tgtTier) candidates.push({ name: (tgtTier as any).name ?? null, multiplier: typeof (tgtTier as any).multiplier === 'number' ? (tgtTier as any).multiplier : null })
+      if (candidates.length) {
+        let chosen = candidates[0]
+        for (const candidate of candidates.slice(1)) {
+          const current = Number(chosen.multiplier ?? 0)
+          const next = Number(candidate.multiplier ?? 0)
+          if (next > current) chosen = candidate
+        }
+        if (candidates.length === 2 && (candidates[0].multiplier === candidates[1].multiplier) && candidates[0].name && candidates[0].name === candidates[1].name) {
+          tierName = candidates[0].name
+          tierMultiplier = candidates[0].multiplier
+        } else {
+          tierName = chosen.name
+          tierMultiplier = chosen.multiplier
+        }
+      }
+    }
+  } catch (_) {}
+
+  try {
+    if (typeof finalIntendedUseId === 'number') {
+      const { data: mapRow } = await supabase.from('intended_use_cert_map').select('cert_type_id').eq('intended_use_id', finalIntendedUseId).maybeSingle()
+      if (mapRow?.cert_type_id) {
+        const { data: certRow } = await supabase.from('cert_types').select('id,name,pricing_type,amount').eq('id', mapRow.cert_type_id).maybeSingle()
+        if (certRow) {
+          if (!certTypeName && (certRow as any).name) certTypeName = String((certRow as any).name)
+          const rawAmount = (certRow as any).amount
+          if (certTypeRate === null && typeof rawAmount === 'number') certTypeRate = rawAmount
+        }
+      }
+      if (!certTypeName || certTypeRate === null) {
+        const { data: intendedUseRow } = await supabase.from('intended_uses').select('certification_type,certification_price').eq('id', finalIntendedUseId).maybeSingle()
+        if (intendedUseRow) {
+          if (!certTypeName && (intendedUseRow as any).certification_type) certTypeName = String((intendedUseRow as any).certification_type)
+          const price = (intendedUseRow as any).certification_price
+          if (certTypeRate === null && price !== null && price !== undefined) {
+            const parsed = Number(price)
+            if (Number.isFinite(parsed)) certTypeRate = parsed
+          }
+        }
+      }
+    }
+  } catch (_) {}
+
+  if (certTypeRate !== null) {
+    certTypeRate = Number(certTypeRate)
+  }
+
+  if (!finalCountry) {
+    try {
+      const { data: resultsRow } = await supabase.from('quote_results').select('results_json').eq('quote_id', quote_id).maybeSingle()
+      const extractedCountry = (resultsRow as any)?.results_json?.country_of_issue
+      if (typeof extractedCountry === 'string') {
+        const normalized = stringOrNull(extractedCountry)
+        if (normalized) finalCountry = normalized
+      }
+    } catch (_) {}
+  }
+
+  const finalStatus = finalName && finalEmail ? 'submitted' : (stringOrNull(existingRow?.status) ?? null)
+  const finalJobId = existingRow?.job_id || jobIdFromQuote(quote_id)
+  const baseRateForStorage = Number(storedBaseRate)
+  const tierMultiplierValue = tierMultiplier !== null ? Number(tierMultiplier) : null
+
+  const finalUpdate: Record<string, any> = {
+    status: finalStatus ?? null,
+    name: finalName ?? null,
+    email: finalEmail ?? null,
+    client_email: finalEmail ?? null,
+    phone: finalPhone ?? null,
+    source_lang: finalSourceLang ?? null,
+    target_lang: finalTargetLang ?? null,
+    intended_use: finalIntendedUse ?? null,
+    intended_use_id: typeof finalIntendedUseId === 'number' ? finalIntendedUseId : null,
+    source_code: finalSourceCode ?? null,
+    target_code: finalTargetCode ?? null,
+    country_of_issue: finalCountry ?? null,
+    country_code: finalCountryCode ?? null,
+    base_rate: baseRateForStorage,
+    tier_name: tierName ?? null,
+    tier_multiplier: tierMultiplierValue,
+    language_tier: tierName ?? null,
+    language_tier_multiplier: tierMultiplierValue,
+    cert_type_name: certTypeName ?? null,
+    cert_type_amount: certTypeRate ?? null,
+    cert_type_rate: certTypeRate ?? null,
+    cert_type_code: certTypeCode ?? null,
+    job_id: finalJobId,
+  }
 
   let persistedStep3Data = false
-  if (Object.keys(update).length) {
-    const { error } = await supabase
-      .from('quote_submissions')
-      .update(update)
-      .eq('quote_id', quote_id)
-    if (error) {
-      return NextResponse.json({ error: 'DB_ERROR', details: error.message }, { status: 500 })
-    }
-    persistedStep3Data = true
+  const { error: updateError } = await supabase.from('quote_submissions').update(finalUpdate).eq('quote_id', quote_id)
+  if (updateError) {
+    return NextResponse.json({ error: 'DB_ERROR', details: updateError.message }, { status: 500 })
   }
+  persistedStep3Data = true
 
-  // Fire webhook only when step 3 fields are present
-  const hasStep3 = Boolean(
-    (source_lang && source_lang.trim()) ||
-    (target_lang && target_lang.trim()) ||
-    typeof intended_use_id === 'number' ||
-    (source_code && source_code.trim()) ||
-    (target_code && target_code.trim()) ||
-    (country && country.trim()) ||
-    (country_code && country_code.trim())
-  )
-  if (hasStep3) {
+  if (persistedStep3Data) {
     const env = { STEP3: process.env.N8N_STEP3_WEBHOOK_URL, PRIMARY: process.env.N8N_WEBHOOK_URL }
-    {
-      // Compute tier/multiplier from languages (+ flexible columns) and tiers
-      let tier_name: string | null = null
-      let tier_multiplier: number | null = null
 
-      async function resolveLangTierFlexible(code?: string, name?: string) {
-        const q = supabase.from('languages').select('*').limit(1)
-        if (code && code.trim()) {
-          const c = code.trim()
-          const { data: langByCode } = await supabase.from('languages').select('*').eq('iso_code', c).maybeSingle()
-          if (langByCode) {
-            const tname = (langByCode as any).tier || null
-            if (tname) {
-              const { data: tierRow } = await supabase.from('language_tiers').select('name,multiplier').eq('name', tname).maybeSingle()
-              if (tierRow) return tierRow as any
-              return { name: tname, multiplier: null as any }
-            }
-          }
-        }
-        if (name && name.trim()) {
-          const n = name.trim()
-          const { data: langByName } = await supabase.from('languages').select('*').ilike('language', n).maybeSingle()
-          if (langByName) {
-            const tname = (langByName as any).tier || null
-            if (tname) {
-              const { data: tierRow } = await supabase.from('language_tiers').select('name,multiplier').eq('name', tname).maybeSingle()
-              if (tierRow) return tierRow as any
-              return { name: tname, multiplier: null as any }
-            }
-          }
-        }
-        return null as any
-      }
-
-      try {
-        const src = await resolveLangTierFlexible(source_code, source_lang)
-        const tgt = await resolveLangTierFlexible(target_code, target_lang)
-        const cand: { name: string | null; multiplier: number | null }[] = []
-        if (src) cand.push({ name: (src as any).name ?? null, multiplier: typeof (src as any).multiplier === 'number' ? (src as any).multiplier : null })
-        if (tgt) cand.push({ name: (tgt as any).name ?? null, multiplier: typeof (tgt as any).multiplier === 'number' ? (tgt as any).multiplier : null })
-        if (cand.length) {
-          // choose highest multiplier; if equal, keep common tier name if same
-          let chosen = cand[0]
-          for (const c of cand.slice(1)) {
-            const m0 = Number(chosen.multiplier ?? 0)
-            const m1 = Number(c.multiplier ?? 0)
-            if (m1 > m0) chosen = c
-          }
-          if (cand.length === 2 && (cand[0].multiplier === cand[1].multiplier) && cand[0].name && cand[0].name === cand[1].name) {
-            tier_name = cand[0].name
-            tier_multiplier = cand[0].multiplier
-          } else {
-            tier_name = chosen.name
-            tier_multiplier = chosen.multiplier
-          }
-        }
-      } catch (_) {}
-
-      // Compute cert type name + rate from intended_use_id → intended_use_cert_map → cert_type(s)
-      let cert_type_name: string | null = null
-      let cert_type_code: string | null = null
-      let cert_type_rate: number | null = null
-      try {
-        if (typeof intended_use_id === 'number') {
-          // mapping table → cert_types
-          const { data: map } = await supabase.from('intended_use_cert_map').select('cert_type_id').eq('intended_use_id', intended_use_id).maybeSingle()
-          if (map?.cert_type_id) {
-            const { data: ct } = await supabase.from('cert_types').select('id,name,pricing_type,amount').eq('id', map.cert_type_id).maybeSingle()
-            if (ct) {
-              cert_type_name = (ct as any).name || null
-              cert_type_rate = typeof (ct as any).amount === 'number' ? (ct as any).amount : null
-            }
-          }
-          // fallback to intended_uses own columns
-          if (!cert_type_name) {
-            const { data: iu } = await supabase.from('intended_uses').select('certification_type,certification_price').eq('id', intended_use_id).maybeSingle()
-            if (iu) {
-              cert_type_name = (iu as any).certification_type || cert_type_name
-              const price = (iu as any).certification_price
-              if (price !== null && price !== undefined) cert_type_rate = Number(price)
-            }
-          }
-        }
-      } catch (_) {}
-
-      // No retries needed with direct schema lookups
-
-      const payloadOut = {
-        event: 'quote_updated',
+    if (env.STEP3) {
+      const step3Payload = {
+        event: 'quote_step3_updated',
         quote_id,
-        job_id: jobIdFromQuote(quote_id),
-        source_language: source_lang || '',
-        target_language: target_lang || '',
-        intended_use_id: typeof intended_use_id === 'number' ? intended_use_id : null,
-        source_code: source_code || null,
-        target_code: target_code || null,
-        country: country || '',
-        country_code: country_code || null,
-        tier: tier_name,
-        tier_multiplier: tier_multiplier,
-        cert_type_name: cert_type_name,
-        cert_type_code: cert_type_code,
-        cert_type_rate: cert_type_rate
+        job_id: finalJobId,
+        base_rate: baseRateForStorage,
+        inputs: {
+          source_lang: finalSourceLang ?? null,
+          target_lang: finalTargetLang ?? null,
+          intended_use: finalIntendedUse ?? null,
+          intended_use_id: typeof finalIntendedUseId === 'number' ? finalIntendedUseId : null,
+          source_code: finalSourceCode ?? null,
+          target_code: finalTargetCode ?? null,
+          country: finalCountry ?? null,
+          country_code: finalCountryCode ?? null,
+        },
+        resolved: {
+          tier_name: tierName ?? null,
+          tier_multiplier: tierMultiplierValue,
+          cert_type_name: certTypeName ?? null,
+          cert_type_code: certTypeCode ?? null,
+          cert_type_rate: certTypeRate ?? null,
+        },
       }
-
-      // Update quote_submissions fields with resolved tier/cert and country
       try {
-        let country_of_issue: string | null = (typeof country === 'string' && country) ? country : null
-        if (!country_of_issue) {
-          const { data: res } = await supabase.from('quote_results').select('results_json').eq('quote_id', quote_id).maybeSingle()
-          country_of_issue = (res as any)?.results_json?.country_of_issue || null
-        }
-        const subUpdates: Record<string, any> = {}
-        if (country_of_issue) subUpdates.country_of_issue = country_of_issue
-        if (baseRate != null) subUpdates.base_rate = baseRate
-        if (tier_name != null) {
-          subUpdates.language_tier = tier_name
-          subUpdates.tier_name = tier_name
-        }
-        if (tier_multiplier != null) {
-          subUpdates.language_tier_multiplier = tier_multiplier
-          subUpdates.tier_multiplier = tier_multiplier
-        }
-        if (cert_type_name != null) subUpdates.cert_type_name = cert_type_name
-        if (cert_type_rate != null) {
-          subUpdates.cert_type_amount = cert_type_rate
-          subUpdates.cert_type_rate = cert_type_rate
-        }
-        if (Object.keys(subUpdates).length) {
-          await supabase.from('quote_submissions').update(subUpdates).eq('quote_id', quote_id)
-          persistedStep3Data = true
-        }
-      } catch (_) {}
-
-      if (env.STEP3 && persistedStep3Data) {
-        const step3Payload = {
-          event: 'quote_step3_updated',
-          quote_id,
-          job_id: jobIdFromQuote(quote_id),
-          base_rate: baseRate,
-          inputs: {
-            source_lang: source_lang || null,
-            target_lang: target_lang || null,
-            intended_use: intended_use || null,
-            intended_use_id: typeof intended_use_id === 'number' ? intended_use_id : null,
-            source_code: source_code || null,
-            target_code: target_code || null,
-            country: country || null,
-            country_code: country_code || null
-          },
-          resolved: {
-            tier_name,
-            tier_multiplier,
-            cert_type_name,
-            cert_type_code,
-            cert_type_rate
-          }
-        }
-        try {
-          await fetch(env.STEP3, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(step3Payload)
-          })
-        } catch (err) {
-          console.error('STEP3_WEBHOOK_FAILED', err)
-        }
+        await fetch(env.STEP3, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(step3Payload),
+        })
+      } catch (err) {
+        console.error('STEP3_WEBHOOK_FAILED', err)
       }
-
-      // Update quote_files metadata with selected fields (best-effort)
-      try {
-        const meta: Record<string, any> = {}
-        if (typeof source_lang === 'string') meta.source_lang = source_lang
-        if (typeof target_lang === 'string') meta.target_lang = target_lang
-        if (typeof intended_use_id === 'number') meta.intended_use_id = intended_use_id
-        if (typeof country === 'string') meta.country_of_issue = country
-        if (Object.keys(meta).length) await supabase.from('quote_files').update(meta).eq('quote_id', quote_id)
-      } catch (_) {}
-
-      // Skip price calculations here as requested
     }
+
+    try {
+      const meta: Record<string, any> = {}
+      if (finalSourceLang) meta.source_lang = finalSourceLang
+      if (finalTargetLang) meta.target_lang = finalTargetLang
+      if (typeof finalIntendedUseId === 'number') meta.intended_use_id = finalIntendedUseId
+      if (finalCountry) meta.country_of_issue = finalCountry
+      if (Object.keys(meta).length) await supabase.from('quote_files').update(meta).eq('quote_id', quote_id)
+    } catch (_) {}
+
+    // Skip price calculations here as requested
   }
 
   return NextResponse.json({ ok: true, customer_id })
