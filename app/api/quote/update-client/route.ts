@@ -8,6 +8,27 @@ function jobIdFromQuote(id: string) {
   return `CS${num}`
 }
 
+function stringOrNull(...values: (string | null | undefined)[]) {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      if (trimmed) return trimmed
+    }
+  }
+  return undefined
+}
+
+function numberOrNull(...values: (number | string | null | undefined)[]) {
+  for (const value of values) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed)) return parsed
+    }
+  }
+  return undefined
+}
+
 export async function POST(req: NextRequest) {
   const payload = await req.json()
   const { quote_id, client_name, client_email, phone } = payload || {}
