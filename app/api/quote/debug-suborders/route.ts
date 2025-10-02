@@ -49,43 +49,27 @@ export async function GET(req: NextRequest) {
   const country_code: string | undefined = (sub as any)?.country_code || undefined
 
   async function resolveLangTierFlexible(code?: string, name?: string) {
-    const orParts: string[] = []
     if (code && code.trim()) {
-      const c = code.trim()
-      orParts.push(`code.eq.${c}`, `iso_code.eq.${c}`, `lang_code.eq.${c}`)
+      const { data: byCode } = await supabase.from('languages').select('*').eq('iso_code', code.trim()).maybeSingle()
+      if (byCode) {
+        const tname = (byCode as any).tier || null
+        if (tname) {
+          const { data: trow } = await supabase.from('language_tiers').select('name,multiplier').eq('name', tname).maybeSingle()
+          if (trow) return trow as any
+          return { name: tname, multiplier: null as any }
+        }
+      }
     }
     if (name && name.trim()) {
-      const n = name.trim()
-      orParts.push(`name.eq.${n}`, `label.eq.${n}`, `language.eq.${n}`, `title.eq.${n}`)
-    }
-    if (orParts.length === 0) return null as any
-    const { data: langRow } = await supabase
-      .from('languages')
-      .select('*')
-      .or(orParts.join(','))
-      .limit(1)
-      .maybeSingle()
-    if (!langRow) return null as any
-    const tid: number | null = typeof (langRow as any).tier_id === 'number' ? (langRow as any).tier_id : null
-    const tname: string | null = (langRow as any).tier_name || (langRow as any).tier || null
-    const directMult: number | null = typeof (langRow as any).multiplier === 'number' ? (langRow as any).multiplier : null
-    if (directMult !== null) return { name: tname, multiplier: directMult }
-    if (tid !== null) {
-      const { data: tierRow } = await supabase
-        .from('tiers')
-        .select('name,multiplier')
-        .eq('id', tid)
-        .maybeSingle()
-      if (tierRow) return tierRow as any
-    }
-    if (tname) {
-      const { data: tierRowByName } = await supabase
-        .from('tiers')
-        .select('name,multiplier')
-        .eq('name', tname)
-        .maybeSingle()
-      if (tierRowByName) return tierRowByName as any
-      return { name: tname, multiplier: null as any }
+      const { data: byName } = await supabase.from('languages').select('*').ilike('language', name.trim()).maybeSingle()
+      if (byName) {
+        const tname = (byName as any).tier || null
+        if (tname) {
+          const { data: trow } = await supabase.from('language_tiers').select('name,multiplier').eq('name', tname).maybeSingle()
+          if (trow) return trow as any
+          return { name: tname, multiplier: null as any }
+        }
+      }
     }
     return null as any
   }
