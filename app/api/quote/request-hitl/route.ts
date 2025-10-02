@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   const { quote_id } = await req.json()
   if (!quote_id) return NextResponse.json({ error: 'INVALID' }, { status: 400 })
   const client = createClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_ANON_KEY as string)
-  const { error } = await client.from('quote_submissions').update({ hitl_requested: true }).eq('quote_id', quote_id)
+  const { error } = await client.from('quote_submissions').update({ hitl_required: true }).eq('quote_id', quote_id)
   if (error) return NextResponse.json({ error: 'DB_ERROR', details: error.message }, { status: 500 })
   const env = getEnv()
   if (env.N8N_WEBHOOK_URL) {
