@@ -292,64 +292,36 @@ export default function QuoteFlowPage() {
               className="mt-8 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
               onClick={async ()=>{
                 if (!quoteId) { alert('Missing quote. Please start again.'); setStep(1); return }
-                if (!langs.source || !(langs.target || langs.targetOther) || !langs.purpose || !langs.country_code) { alert('Please select source, target, intended use, and country of issue.'); return }
-                const targetText = langs.target === 'Other' ? (langs.targetOther || '') : langs.target
-                try {
-                  setOverlayMode('process')
-                  setProcessingOpen(true)
-                  const res = await fetch('/api/quote/update-client', {
-                    method: 'POST', headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify({
-                      quote_id: quoteId,
-                      client_name: details.fullName,
-                      client_email: details.email,
-                      phone: details.phone,
-                      source_lang: langs.source,
-                      target_lang: targetText,
-                      intended_use_id: langs.intended_use_id,
-                      intended_use: langs.purpose,
-                      source_code: langs.source_code,
-                      target_code: langs.target_code,
-                      country: langs.country,
-                      country_code: langs.country_code
-                    })
-                  })
-                  if (!res.ok) throw new Error('UPDATE_FAILED')
-                  setProcessingOpen(false)
-                  setStep(3)
-
-                  // Begin background poll up to 45s for quote readiness while user fills Step 3
-                  ;(async ()=>{
-                    const timeoutMs = 45000
-                    const intervalMs = 5000
-                    const start = Date.now()
-                    for (;;) {
-                      try {
-                        const st = await fetch(`/api/quote/status/${quoteId}`)
-                        if (st.ok) {
-                          const { n8n_status, stage } = await st.json()
-                          if (n8n_status === 'ready' || stage === 'ready' || stage === 'calculated') {
-                            router.push(`/quote/${quoteId}`)
-                            break
-                          }
-                        }
-                      } catch {}
-                      if (Date.now() - start >= timeoutMs) {
-                        await fetch('/api/quote/request-hitl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quote_id: quoteId }) })
-                        break
-                      }
-                      await new Promise(r=>setTimeout(r, intervalMs))
-                    }
-                  })()
-                } catch (e) {
-                  console.error(e)
-                  setProcessingOpen(false)
-                  alert('There was a problem saving your selections. Please try again.')
+                if (!step2Payload) { alert('Please select source, target, intended use, and country of issue.'); return }
+                const payloadKey = step2PayloadKey
+                const alreadySaved = payloadKey && step2SavedKey === payloadKey && !step2Error
+                if (!alreadySaved) {
+                  try {
+                    step2RequestActive.current = true
+                    setStep2Saving(true)
+                    await callUpdateClient(step2Payload, { showOverlay: true })
+                    setStep2SavedKey(payloadKey ?? null)
+                    setStep2Error(null)
+                  } catch (e) {
+                    console.error(e)
+                    step2RequestActive.current = false
+                    setStep2Saving(false)
+                    return
+                  }
+                  step2RequestActive.current = false
+                  setStep2Saving(false)
                 }
+                setStep(3)
+                startBackgroundPolling()
               }}
             >
               Continue
             </button>
+            <div className="mt-2 text-xs">
+              {step2Saving && <span className="text-gray-500">Saving selections…</span>}
+              {!step2Saving && step2PayloadKey && step2SavedKey === step2PayloadKey && !step2Error && <span className="text-green-600">Selections saved.</span>}
+              {step2Error && <span className="text-red-600">{step2Error}</span>}
+            </div>
           </div>
         )}
 
