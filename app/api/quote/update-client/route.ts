@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
   if (typeof target_code === 'string' && target_code) update.target_code = target_code
   if (typeof country_code === 'string' && country_code) update.country_code = country_code
 
+  let persistedStep3Data = false
   if (Object.keys(update).length) {
     const { error } = await supabase
       .from('quote_submissions')
@@ -91,7 +92,6 @@ export async function POST(req: NextRequest) {
     (country && country.trim()) ||
     (country_code && country_code.trim())
   )
-  let persistedStep3Data = false
   if (hasStep3) {
     const env = { STEP3: process.env.N8N_STEP3_WEBHOOK_URL, PRIMARY: process.env.N8N_WEBHOOK_URL }
     {
