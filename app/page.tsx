@@ -248,26 +248,6 @@ export default function QuoteFlowPage() {
   }
 
 
-  async function runQuoteFlow() {
-    if (!quoteId) { alert('Please start by uploading files in Step 1.'); setStep(1); return }
-    if (!details.fullName || !details.email) { alert('Please enter your name and email'); return }
-    setOverlayMode('process')
-    setProcessingOpen(true)
-    try {
-      const submitRes = await fetch('/api/quote/update-client', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ quote_id: quoteId, client_name: details.fullName, client_email: details.email, phone: details.phone })
-      })
-      if (!submitRes.ok) throw new Error('UPDATE_CLIENT_FAILED')
-      setProcessingOpen(false)
-      setStep(3)
-    } catch (e) {
-      console.error(e)
-      setProcessingOpen(false)
-      alert('There was a problem saving your details. Please try again.')
-    }
-  }
-
 
   return (
     <div>
