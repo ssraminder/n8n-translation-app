@@ -241,36 +241,18 @@ export default function QuoteFlowPage() {
               onClick={async ()=>{
                 if (!quoteId) { alert('Missing quote. Please start again.'); setStep(1); return }
                 if (!step2Payload) { alert('Please select source, target, intended use, and country of issue.'); return }
-                const payloadKey = step2PayloadKey
-                const alreadySaved = payloadKey && step2SavedKey === payloadKey && !step2Error
-                if (!alreadySaved) {
-                  try {
-                    step2RequestActive.current = true
-                    setStep2Saving(true)
-                    await callUpdateClient(step2Payload, { showOverlay: true })
-                    setStep2SavedKey(payloadKey ?? null)
-                    setStep2Error(null)
-                  } catch (e) {
-                    console.error(e)
-                    step2RequestActive.current = false
-                    setStep2Saving(false)
-                    return
-                  }
-                  step2RequestActive.current = false
-                  setStep2Saving(false)
+                try {
+                  await callUpdateClient(step2Payload, { showOverlay: true })
+                } catch (e: any) {
+                  console.error(e)
+                  alert(`Unable to save selections. ${e?.message || e}`)
+                  return
                 }
-                setStep2Error(null)
                 setStep(3)
-                startBackgroundPolling()
               }}
             >
               Continue
             </button>
-            <div className="mt-2 text-xs">
-              {step2Saving && <span className="text-gray-500">Saving selections…</span>}
-              {!step2Saving && step2PayloadKey && step2SavedKey === step2PayloadKey && !step2Error && <span className="text-green-600">Selections saved.</span>}
-              {step2Error && <span className="text-red-600">{step2Error}</span>}
-            </div>
           </div>
         )}
 
