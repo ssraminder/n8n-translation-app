@@ -172,16 +172,6 @@ export default function QuoteFlowPage() {
         {step === 2 && (
           <div>
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Enter Your Details</h2>
-              <p className="text-gray-600">We need some basic information to process your quote</p>
-            </div>
-            <ClientDetailsForm value={details} onChange={setDetails} onContinue={runQuoteFlow} />
-          </div>
-        )}
-
-        {step === 3 && (
-          <div>
-            <div className="text-center mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Select Languages and Intended Use</h2>
               <p className="text-gray-600">Confirm or adjust your source/target languages and intended use</p>
             </div>
@@ -213,30 +203,32 @@ export default function QuoteFlowPage() {
                     })
                   })
                   if (!res.ok) throw new Error('UPDATE_FAILED')
-                  setStep(4)
+                  setProcessingOpen(false)
+                  setStep(3)
 
-                  // Wait up to 45s for quote readiness
-                  const timeoutMs = 45000
-                  const intervalMs = 5000
-                  const start = Date.now()
-                  let ready = false
-                  // Immediate check + poll
-                  for (;;) {
-                    const st = await fetch(`/api/quote/status/${quoteId}`)
-                    if (st.ok) {
-                      const { n8n_status, stage } = await st.json()
-                      if (n8n_status === 'ready' || stage === 'ready' || stage === 'calculated') { ready = true; break }
+                  // Begin background poll up to 45s for quote readiness while user fills Step 3
+                  ;(async ()=>{
+                    const timeoutMs = 45000
+                    const intervalMs = 5000
+                    const start = Date.now()
+                    for (;;) {
+                      try {
+                        const st = await fetch(`/api/quote/status/${quoteId}`)
+                        if (st.ok) {
+                          const { n8n_status, stage } = await st.json()
+                          if (n8n_status === 'ready' || stage === 'ready' || stage === 'calculated') {
+                            router.push(`/quote/${quoteId}`)
+                            break
+                          }
+                        }
+                      } catch {}
+                      if (Date.now() - start >= timeoutMs) {
+                        await fetch('/api/quote/request-hitl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quote_id: quoteId }) })
+                        break
+                      }
+                      await new Promise(r=>setTimeout(r, intervalMs))
                     }
-                    if (Date.now() - start >= timeoutMs) break
-                    await new Promise(r=>setTimeout(r, intervalMs))
-                  }
-                  if (ready) {
-                    router.push(`/quote/${quoteId}`)
-                  } else {
-                    await fetch('/api/quote/request-hitl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quote_id: quoteId }) })
-                    setProcessingOpen(false)
-                    alert('Your quote is taking longer than expected. Our team will get back to you shortly.')
-                  }
+                  })()
                 } catch (e) {
                   console.error(e)
                   setProcessingOpen(false)
@@ -246,6 +238,34 @@ export default function QuoteFlowPage() {
             >
               Continue
             </button>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div>
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Enter Your Details</h2>
+              <p className="text-gray-600">We need some basic information to process your quote</p>
+            </div>
+            <ClientDetailsForm value={details} onChange={setDetails} onContinue={async ()=>{
+              try {
+                if (!quoteId) { alert('Missing quote. Please start again.'); setStep(1); return }
+                if (!details.fullName || !details.email) { alert('Please enter your name and email'); return }
+                setOverlayMode('process')
+                setProcessingOpen(true)
+                const submitRes = await fetch('/api/quote/update-client', {
+                  method: 'POST', headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({ quote_id: quoteId, client_name: details.fullName, client_email: details.email, phone: details.phone })
+                })
+                if (!submitRes.ok) throw new Error('UPDATE_CLIENT_FAILED')
+                setProcessingOpen(false)
+                // Stay on Step 3 while background poll (from Step 2) navigates when ready
+              } catch (e) {
+                console.error(e)
+                setProcessingOpen(false)
+                alert('There was a problem saving your details. Please try again.')
+              }
+            }} />
           </div>
         )}
 
