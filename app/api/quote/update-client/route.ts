@@ -71,8 +71,8 @@ export async function POST(req: NextRequest) {
   )
   if (hasStep3) {
     const env = { STEP3: process.env.N8N_STEP3_WEBHOOK_URL, PRIMARY: process.env.N8N_WEBHOOK_URL }
-    const webhook = env.STEP3 || env.PRIMARY
-    if (webhook) {
+    const webhook = undefined as any
+    {
       // Compute tier/multiplier from languages (+ flexible columns) and tiers
       let tier_name: string | null = null
       let tier_multiplier: number | null = null
@@ -240,31 +240,49 @@ export async function POST(req: NextRequest) {
         cert_type_rate: cert_type_rate
       }
 
-      if (tier_multiplier != null && cert_type_name != null && cert_type_rate != null) {
-        await fetch(webhook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payloadOut) })
-      } else {
-        try {
-          await supabase.from('quote_submissions').update({ hitl_requested: true }).eq('quote_id', quote_id)
-        } catch (_) {}
-        const hitlPayload: any = {
-          quote_id,
-          hitl_requested: true,
-          job_id: jobIdFromQuote(quote_id),
-          source_language: source_lang || '',
-          target_language: target_lang || '',
-          intended_use: typeof intended_use === 'string' ? intended_use : '',
-          country_of_issue: country || ''
+      // Update quote_submissions.country_of_issue and write quote_sub_orders based on results
+      try {
+        let country_of_issue: string | null = (typeof country === 'string' && country) ? country : null
+        if (!country_of_issue) {
+          const { data: res } = await supabase.from('quote_results').select('results_json').eq('quote_id', quote_id).maybeSingle()
+          country_of_issue = (res as any)?.results_json?.country_of_issue || null
         }
-        try {
-          if (!hitlPayload.country_of_issue) {
-            const { data: res } = await supabase.from('quote_results').select('results_json').eq('quote_id', quote_id).maybeSingle()
-            hitlPayload.country_of_issue = (res as any)?.results_json?.country_of_issue || ''
-          }
-        } catch (_) {}
-        if (process.env.N8N_WEBHOOK_URL) {
-          await fetch(String(process.env.N8N_WEBHOOK_URL), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(hitlPayload) }).catch(()=>{})
+        if (country_of_issue) {
+          await supabase.from('quote_submissions').update({ country_of_issue }).eq('quote_id', quote_id)
         }
-      }
+      } catch (_) {}
+
+      try {
+        const { data: res } = await supabase.from('quote_results').select('results_json').eq('quote_id', quote_id).maybeSingle()
+        const documents: any[] = (res as any)?.results_json?.documents || []
+        if (Array.isArray(documents) && documents.length) {
+          await supabase.from('quote_sub_orders').delete().eq('quote_id', quote_id)
+          function roundUpTo(value: number, step: number) { return step > 0 ? Math.ceil(value / step) * step : value }
+          const certAmt = typeof cert_type_rate === 'number' ? cert_type_rate : 0
+          const rows = documents.map((d: any) => {
+            const label = d.document_type || d.filename || d.label || 'document'
+            const pages = typeof d.pages === 'number' ? d.pages : (typeof d.billable_pages === 'number' ? d.billable_pages : 0)
+            const docMult = typeof d.language_multiplier === 'number' ? d.language_multiplier : null
+            const tierMult = docMult != null ? docMult : (tier_multiplier ?? 1)
+            const unit = roundUpTo(65 * (tierMult || 1), 2.5)
+            const amtPages = Number((pages * unit).toFixed(2))
+            const lineTotal = Number((amtPages + certAmt).toFixed(2))
+            return {
+              quote_id,
+              document_label: label,
+              billable_pages: Number(pages.toFixed(2)),
+              language_tier_multiplier: Number((tierMult || 1).toFixed(3)),
+              unit_rate: Number(unit.toFixed(2)),
+              amount_pages: amtPages,
+              certification_type_code: cert_type_name || null,
+              certification_type_name: cert_type_name || null,
+              certification_amount: certAmt,
+              line_total: lineTotal,
+            }
+          })
+          if (rows.length) await supabase.from('quote_sub_orders').insert(rows)
+        }
+      } catch (_) {}
     }
   }
 
