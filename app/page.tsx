@@ -286,6 +286,7 @@ export default function QuoteFlowPage() {
             <div className="text-center mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Select Languages and Intended Use</h2>
               <p className="text-gray-600">Confirm or adjust your source/target languages and intended use</p>
+              {jobId && <p className="mt-2 text-sm text-gray-500">Job ID: <span className="font-mono">{jobId}</span></p>}
             </div>
             <LanguageSelects value={langs} onChange={setLangs} />
             <button
