@@ -97,32 +97,6 @@ export default function QuoteFlowPage() {
     }
   }, [setOverlayMode, setProcessingOpen])
 
-  const startBackgroundPolling = useCallback(() => {
-    if (!quoteId || pollingStarted) return
-    setPollingStarted(true)
-    ;(async () => {
-      const timeoutMs = 45000
-      const intervalMs = 5000
-      const startTime = Date.now()
-      for (;;) {
-        try {
-          const st = await fetch(`/api/quote/status/${quoteId}`)
-          if (st.ok) {
-            const { n8n_status, stage } = await st.json()
-            if (n8n_status === 'ready' || stage === 'ready' || stage === 'calculated') {
-              router.push(`/quote/${quoteId}`)
-              break
-            }
-          }
-        } catch {}
-        if (Date.now() - startTime >= timeoutMs) {
-          await fetch('/api/quote/request-hitl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quote_id: quoteId }) })
-          break
-        }
-        await new Promise((resolve) => setTimeout(resolve, intervalMs))
-      }
-    })()
-  }, [pollingStarted, quoteId, router])
 
 
   const quote: QuoteDetails = useMemo(()=> ({
