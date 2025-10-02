@@ -167,6 +167,14 @@ export async function GET(req: NextRequest) {
         cert_type_rate = typeof (certByName as any).amount === 'number' ? (certByName as any).amount : cert_type_rate
       }
     }
+    if (!cert_type_name && typeof intended_use_id === 'number') {
+      const { data: iu } = await supabase.from('intended_uses').select('certification_type,certification_price').eq('id', intended_use_id).maybeSingle()
+      if (iu) {
+        cert_type_name = (iu as any).certification_type || cert_type_name
+        const price = (iu as any).certification_price
+        if (price !== null && price !== undefined) cert_type_rate = Number(price)
+      }
+    }
   } catch {}
 
   // Existing sub-order rows
