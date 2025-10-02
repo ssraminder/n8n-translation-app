@@ -275,6 +275,15 @@ export default function QuoteFlowPage() {
                 alert('There was a problem saving your details. Please try again.')
               }
             }} />
+            {debugInfo && (
+              <div className="mt-8">
+                <div className="text-sm font-semibold text-gray-800 mb-2">Sub-Order Update Debug</div>
+                <div className="bg-gray-50 border border-gray-200 rounded p-4 overflow-auto text-xs text-gray-800">
+                  <pre className="whitespace-pre-wrap break-all">{JSON.stringify(debugInfo, null, 2)}</pre>
+                </div>
+                <p className="mt-2 text-xs text-gray-500">This shows all inputs and computed values that would be used to update quote_sub_orders.</p>
+              </div>
+            )}
           </div>
         )}
 
