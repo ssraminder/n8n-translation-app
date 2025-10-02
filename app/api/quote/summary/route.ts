@@ -101,7 +101,14 @@ export async function GET(req: NextRequest) {
   }
 
   const subtotal = Number(lineItems.reduce((a, b) => a + (b.line_total || 0), 0).toFixed(2))
-  const taxRate = 0.05
+  let taxRate = 0.05
+  try {
+    const { data: settings } = await supabase.from('app_settings').select('gst_rate').maybeSingle()
+    if (settings?.gst_rate !== null && settings?.gst_rate !== undefined) {
+      const v = Number(settings.gst_rate)
+      if (Number.isFinite(v)) taxRate = v
+    }
+  } catch {}
   const tax = Number((subtotal * taxRate).toFixed(2))
   const total = Number((subtotal + tax).toFixed(2))
 
