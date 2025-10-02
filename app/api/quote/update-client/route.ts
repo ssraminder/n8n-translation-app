@@ -282,16 +282,30 @@ export async function POST(req: NextRequest) {
         cert_type_rate: cert_type_rate
       }
 
-      // Update quote_submissions.country_of_issue and write quote_sub_orders based on results
+      // Update quote_submissions fields with resolved tier/cert and country
       try {
         let country_of_issue: string | null = (typeof country === 'string' && country) ? country : null
         if (!country_of_issue) {
           const { data: res } = await supabase.from('quote_results').select('results_json').eq('quote_id', quote_id).maybeSingle()
           country_of_issue = (res as any)?.results_json?.country_of_issue || null
         }
-        if (country_of_issue) {
-          await supabase.from('quote_submissions').update({ country_of_issue }).eq('quote_id', quote_id)
-        }
+        const subUpdates: Record<string, any> = {}
+        if (country_of_issue) subUpdates.country_of_issue = country_of_issue
+        if (tier_name != null) subUpdates.language_tier = tier_name
+        if (tier_multiplier != null) subUpdates.language_tier_multiplier = tier_multiplier
+        if (cert_type_name != null) subUpdates.cert_type_name = cert_type_name
+        if (cert_type_rate != null) subUpdates.cert_type_amount = cert_type_rate
+        if (Object.keys(subUpdates).length) await supabase.from('quote_submissions').update(subUpdates).eq('quote_id', quote_id)
+      } catch (_) {}
+
+      // Update quote_files metadata with selected fields (best-effort)
+      try {
+        const meta: Record<string, any> = {}
+        if (typeof source_lang === 'string') meta.source_lang = source_lang
+        if (typeof target_lang === 'string') meta.target_lang = target_lang
+        if (typeof intended_use_id === 'number') meta.intended_use_id = intended_use_id
+        if (typeof country === 'string') meta.country_of_issue = country
+        if (Object.keys(meta).length) await supabase.from('quote_files').update(meta).eq('quote_id', quote_id)
       } catch (_) {}
 
       try {
