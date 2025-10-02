@@ -267,7 +267,6 @@ export default function QuoteFlowPage() {
               try {
                 if (!quoteId) { alert('Missing quote. Please start again.'); setStep(1); return }
                 if (!details.fullName || !details.email) { alert('Please enter your name and email'); return }
-                if (!pollingStarted) startBackgroundPolling()
                 setOverlayMode('process')
                 setProcessingOpen(true)
                 const submitRes = await fetch('/api/quote/update-client', {
