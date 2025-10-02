@@ -25,6 +25,7 @@ export default function QuoteFlowPage() {
   const [processingOpen, setProcessingOpen] = useState(false)
   const [overlayMode, setOverlayMode] = useState<'upload' | 'process'>('process')
   const [quoteId, setQuoteId] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<any | null>(null)
 
   const quote: QuoteDetails = useMemo(()=> ({
     price: 89.95,
