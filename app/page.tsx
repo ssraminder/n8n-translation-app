@@ -27,11 +27,6 @@ export default function QuoteFlowPage() {
   const [quoteId, setQuoteId] = useState<string | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
   const [debugInfo, setDebugInfo] = useState<any | null>(null)
-  const [step2Saving, setStep2Saving] = useState(false)
-  const [step2Error, setStep2Error] = useState<string | null>(null)
-  const [step2SavedKey, setStep2SavedKey] = useState<string | null>(null)
-  const step2RequestActive = useRef(false)
-  const [pollingStarted, setPollingStarted] = useState(false)
 
   useEffect(() => {
     if (step === 4 && quoteId) {
