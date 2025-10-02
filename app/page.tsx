@@ -132,6 +132,7 @@ export default function QuoteFlowPage() {
     if (step !== 2) return
     if (!step2Payload || !step2PayloadKey) {
       setStep2Error(null)
+      if (step2SavedKey) setStep2SavedKey(null)
       return
     }
     if (step2SavedKey === step2PayloadKey || step2RequestActive.current) return
