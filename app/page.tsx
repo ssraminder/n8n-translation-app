@@ -326,6 +326,15 @@ export default function QuoteFlowPage() {
               </ul>
               <p className="mt-6 text-gray-500 text-sm">If this takes longer than expected, we’ll route you to a human review and follow up via email.</p>
             </div>
+            {debugInfo && (
+              <div className="mt-6 max-w-2xl mx-auto">
+                <div className="text-sm font-semibold text-gray-800 mb-2">Sub-Order Update Debug</div>
+                <div className="bg-gray-50 border border-gray-200 rounded p-4 overflow-auto text-xs text-gray-800">
+                  <pre className="whitespace-pre-wrap break-all">{JSON.stringify(debugInfo, null, 2)}</pre>
+                </div>
+                <p className="mt-2 text-xs text-gray-500">Debug preview of inputs and computed values used to update quote_sub_orders.</p>
+              </div>
+            )}
           </div>
         )}
 
