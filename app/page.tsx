@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProgressBar, StepIndex } from '@/components/ProgressBar'
 import { FileUploadArea } from '@/components/FileUploadArea'
