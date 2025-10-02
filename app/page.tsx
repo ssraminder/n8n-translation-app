@@ -213,6 +213,7 @@ export default function QuoteFlowPage() {
         const json = await createRes.json()
         if (!json?.quote_id || typeof json.quote_id !== 'string') throw new Error('CREATE_NO_ID')
         quote_id = json.quote_id
+        if (json?.job_id) setJobId(String(json.job_id))
       }
       const uploaded: { path: string; contentType: string; filename: string; bytes: number }[] = []
       const idempotency_key = newId()
