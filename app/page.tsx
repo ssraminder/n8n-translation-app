@@ -215,9 +215,7 @@ export default function QuoteFlowPage() {
                   if (!res.ok) throw new Error('UPDATE_FAILED')
                   setStep(4)
 
-                  // Wait up to 30s for quote readiness
-                  const start = Date.now()
-                  let ready = false
+                  // Wait up to 45s for quote readiness
                   const timeoutMs = 45000
                   const intervalMs = 5000
                   const start = Date.now()
