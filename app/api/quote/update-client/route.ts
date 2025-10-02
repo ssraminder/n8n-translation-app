@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 
   const { data: existingSubmission } = await supabase
     .from('quote_submissions')
-    .select('status,name,email,client_email,phone,source_lang,target_lang,intended_use,intended_use_id,source_code,target_code,country_of_issue,country_code,base_rate,tier_name,tier_multiplier,language_tier,language_tier_multiplier,cert_type_name,cert_type_amount,cert_type_rate,job_id,cert_type_code')
+    .select('*')
     .eq('quote_id', quote_id)
     .maybeSingle()
 
@@ -229,7 +229,9 @@ export async function POST(req: NextRequest) {
   }
 
   let persistedStep3Data = false
-  const { error: updateError } = await supabase.from('quote_submissions').update(finalUpdate).eq('quote_id', quote_id)
+  const allowedKeys = existingRow ? Object.keys(existingRow) : []
+  const filteredUpdate = Object.fromEntries(Object.entries(finalUpdate).filter(([k]) => allowedKeys.includes(k)))
+  const { error: updateError } = await supabase.from('quote_submissions').update(filteredUpdate).eq('quote_id', quote_id)
   if (updateError) {
     return NextResponse.json({ error: 'DB_ERROR', details: updateError.message }, { status: 500 })
   }
