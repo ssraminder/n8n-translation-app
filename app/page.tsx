@@ -85,7 +85,12 @@ export default function QuoteFlowPage() {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload)
       })
-      if (!res.ok) throw new Error('UPDATE_FAILED')
+      if (!res.ok) {
+        let info = ''
+        try { const j = await res.json(); info = j?.details || j?.error || JSON.stringify(j) } catch { try { info = await res.text() } catch {} }
+        const code = `HTTP_${res.status}`
+        throw new Error(`${code}: ${info}`)
+      }
       if (showOverlay) setProcessingOpen(false)
       return true
     } catch (error) {
