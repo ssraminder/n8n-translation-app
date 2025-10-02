@@ -20,6 +20,15 @@ export async function POST(req: NextRequest) {
   const anonKey = process.env.SUPABASE_ANON_KEY as string
   const supabase = createClient(supabaseUrl, serviceKey || anonKey, { auth: { persistSession: false, autoRefreshToken: false } })
 
+  let baseRate = 40
+  try {
+    const { data: settings } = await supabase.from('app_settings').select('base_rate').maybeSingle()
+    if (settings?.base_rate !== null && settings?.base_rate !== undefined) {
+      const val = Number(settings.base_rate)
+      if (Number.isFinite(val)) baseRate = val
+    }
+  } catch (_) {}
+
   // Optional: create or find customer by email
   let customer_id: string | null = null
   try {
@@ -49,7 +58,8 @@ export async function POST(req: NextRequest) {
   if (source_lang) update.source_lang = source_lang
   if (target_lang) update.target_lang = target_lang
   if (typeof intended_use === 'string') update.intended_use = intended_use
-  // Note: we intentionally do not write intended_use_id/source_code/target_code/country/country_code to DB to avoid schema mismatches
+  if (typeof country === 'string' && country) update.country_of_issue = country
+  // Note: we intentionally do not write intended_use_id/source_code/target_code/country_code to DB to avoid schema mismatches
 
   const { error } = await supabase
     .from('quote_submissions')
@@ -130,6 +140,7 @@ export async function POST(req: NextRequest) {
 
       // Compute cert type name + rate from intended_use_id → intended_use_cert_map → cert_type(s)
       let cert_type_name: string | null = null
+      let cert_type_code: string | null = null
       let cert_type_rate: number | null = null
       try {
         if (typeof intended_use_id === 'number') {
@@ -138,26 +149,37 @@ export async function POST(req: NextRequest) {
             .select('*')
             .eq('intended_use_id', intended_use_id)
             .maybeSingle()
+          if (mapRow && typeof (mapRow as any).cert_type_code === 'string' && (mapRow as any).cert_type_code.trim()) {
+            cert_type_code = ((mapRow as any).cert_type_code as string).trim()
+          }
           const certTypeId: number | string | null = mapRow ? ((mapRow as any).cert_type_id ?? (mapRow as any).cert_type ?? null) : null
           if (certTypeId !== null) {
             if (typeof certTypeId === 'number') {
               const { data: cert } = await supabase
                 .from('cert_types')
-                .select('id,name,amount,pricing_type,multiplier,rate')
+                .select('id,name,code,amount,pricing_type,multiplier,rate')
                 .eq('id', certTypeId)
                 .maybeSingle()
               if (cert) {
-                cert_type_name = (cert as any).name ?? null
+                cert_type_name = (cert as any).name ?? cert_type_name
+                if ((cert as any).code) {
+                  const codeVal = String((cert as any).code).trim()
+                  if (codeVal) cert_type_code = codeVal
+                }
                 cert_type_rate = typeof (cert as any).rate === 'number' ? (cert as any).rate : (typeof (cert as any).amount === 'number' ? (cert as any).amount : (typeof (cert as any).multiplier === 'number' ? (cert as any).multiplier : null))
               }
             } else {
               const { data: cert } = await supabase
                 .from('cert_types')
-                .select('id,name,amount,pricing_type,multiplier,rate')
+                .select('id,name,code,amount,pricing_type,multiplier,rate')
                 .eq('name', String(certTypeId))
                 .maybeSingle()
               if (cert) {
-                cert_type_name = (cert as any).name ?? null
+                cert_type_name = (cert as any).name ?? cert_type_name
+                if ((cert as any).code) {
+                  const codeVal = String((cert as any).code).trim()
+                  if (codeVal) cert_type_code = codeVal
+                }
                 cert_type_rate = typeof (cert as any).rate === 'number' ? (cert as any).rate : (typeof (cert as any).amount === 'number' ? (cert as any).amount : (typeof (cert as any).multiplier === 'number' ? (cert as any).multiplier : null))
               }
             }
@@ -167,21 +189,25 @@ export async function POST(req: NextRequest) {
           const term = intended_use.trim()
           let { data: certByName } = await supabase
             .from('cert_types')
-            .select('id,name,amount,pricing_type,multiplier,rate')
+            .select('id,name,code,amount,pricing_type,multiplier,rate')
             .ilike('name', term)
             .maybeSingle()
           if (!certByName) {
             const like = term.includes('cert') ? '%cert%' : `%${term}%`
             const { data } = await supabase
               .from('cert_types')
-              .select('id,name,amount,pricing_type,multiplier,rate')
+              .select('id,name,code,amount,pricing_type,multiplier,rate')
               .ilike('name', like)
               .limit(1)
               .maybeSingle()
             certByName = data as any
           }
           if (certByName) {
-            cert_type_name = (certByName as any).name ?? null
+            cert_type_name = (certByName as any).name ?? cert_type_name
+            if ((certByName as any).code) {
+              const codeVal = String((certByName as any).code).trim()
+              if (codeVal) cert_type_code = codeVal
+            }
             cert_type_rate = typeof (certByName as any).rate === 'number' ? (certByName as any).rate : (typeof (certByName as any).amount === 'number' ? (certByName as any).amount : (typeof (certByName as any).multiplier === 'number' ? (certByName as any).multiplier : null))
           }
         }
@@ -210,12 +236,16 @@ export async function POST(req: NextRequest) {
             const term = intended_use.trim()
             const { data: cert } = await supabase
               .from('cert_types')
-              .select('id,name,amount,pricing_type,multiplier,rate')
+              .select('id,name,code,amount,pricing_type,multiplier,rate')
               .ilike('name', `%${term}%`)
               .limit(1)
               .maybeSingle()
             if (cert) {
               cert_type_name = (cert as any).name ?? cert_type_name
+              if ((cert as any).code) {
+                const codeVal = String((cert as any).code).trim()
+                if (codeVal) cert_type_code = codeVal
+              }
               const rate = typeof (cert as any).rate === 'number' ? (cert as any).rate : (typeof (cert as any).amount === 'number' ? (cert as any).amount : (typeof (cert as any).multiplier === 'number' ? (cert as any).multiplier : null))
               cert_type_rate = rate ?? cert_type_rate
             }
@@ -237,6 +267,8 @@ export async function POST(req: NextRequest) {
         tier: tier_name,
         tier_multiplier: tier_multiplier,
         cert_type_name: cert_type_name,
+        cert_type_code,
+        cert_type_code,
         cert_type_rate: cert_type_rate
       }
 
@@ -264,7 +296,8 @@ export async function POST(req: NextRequest) {
             const pages = typeof d.pages === 'number' ? d.pages : (typeof d.billable_pages === 'number' ? d.billable_pages : 0)
             const docMult = typeof d.language_multiplier === 'number' ? d.language_multiplier : null
             const tierMult = docMult != null ? docMult : (tier_multiplier ?? 1)
-            const unit = roundUpTo(65 * (tierMult || 1), 2.5)
+            const baseTimesTier = baseRate * (tierMult || 1)
+            const unit = roundUpTo(baseTimesTier, 2.5)
             const amtPages = Number((pages * unit).toFixed(2))
             const lineTotal = Number((amtPages + certAmt).toFixed(2))
             return {
@@ -274,7 +307,7 @@ export async function POST(req: NextRequest) {
               language_tier_multiplier: Number((tierMult || 1).toFixed(3)),
               unit_rate: Number(unit.toFixed(2)),
               amount_pages: amtPages,
-              certification_type_code: cert_type_name || null,
+              certification_type_code: cert_type_code || null,
               certification_type_name: cert_type_name || null,
               certification_amount: certAmt,
               line_total: lineTotal,
