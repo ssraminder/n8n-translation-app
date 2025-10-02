@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
   )
   if (hasStep3) {
     const env = { STEP3: process.env.N8N_STEP3_WEBHOOK_URL, PRIMARY: process.env.N8N_WEBHOOK_URL }
-    const webhook = env.STEP3 || env.PRIMARY
+    const webhook = undefined as any
     if (webhook) {
       // Compute tier/multiplier from languages (+ flexible columns) and tiers
       let tier_name: string | null = null
