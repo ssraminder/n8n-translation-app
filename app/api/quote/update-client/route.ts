@@ -65,7 +65,10 @@ export async function POST(req: NextRequest) {
   if (target_lang) update.target_lang = target_lang
   if (typeof intended_use === 'string') update.intended_use = intended_use
   if (typeof country === 'string' && country) update.country_of_issue = country
-  // Note: we intentionally do not write intended_use_id/source_code/target_code/country_code to DB to avoid schema mismatches
+  if (typeof intended_use_id === 'number' && Number.isFinite(intended_use_id)) update.intended_use_id = intended_use_id
+  if (typeof source_code === 'string' && source_code) update.source_code = source_code
+  if (typeof target_code === 'string' && target_code) update.target_code = target_code
+  if (typeof country_code === 'string' && country_code) update.country_code = country_code
 
   if (Object.keys(update).length) {
     const { error } = await supabase
