@@ -268,7 +268,7 @@ export default function QuoteFlowPage() {
                     setDebugInfo(data)
                   }
                 } catch {}
-                // Stay on Step 3 while background poll (from Step 2) navigates when ready
+                setStep(4)
               } catch (e) {
                 console.error(e)
                 setProcessingOpen(false)
