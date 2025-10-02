@@ -208,10 +208,20 @@ export async function POST(req: NextRequest) {
         }
         const subUpdates: Record<string, any> = {}
         if (country_of_issue) subUpdates.country_of_issue = country_of_issue
-        if (tier_name != null) subUpdates.language_tier = tier_name
-        if (tier_multiplier != null) subUpdates.language_tier_multiplier = tier_multiplier
+        if (baseRate != null) subUpdates.base_rate = baseRate
+        if (tier_name != null) {
+          subUpdates.language_tier = tier_name
+          subUpdates.tier_name = tier_name
+        }
+        if (tier_multiplier != null) {
+          subUpdates.language_tier_multiplier = tier_multiplier
+          subUpdates.tier_multiplier = tier_multiplier
+        }
         if (cert_type_name != null) subUpdates.cert_type_name = cert_type_name
-        if (cert_type_rate != null) subUpdates.cert_type_amount = cert_type_rate
+        if (cert_type_rate != null) {
+          subUpdates.cert_type_amount = cert_type_rate
+          subUpdates.cert_type_rate = cert_type_rate
+        }
         if (Object.keys(subUpdates).length) {
           await supabase.from('quote_submissions').update(subUpdates).eq('quote_id', quote_id)
           persistedStep3Data = true
