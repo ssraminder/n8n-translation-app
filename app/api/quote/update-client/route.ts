@@ -267,8 +267,7 @@ export async function POST(req: NextRequest) {
         tier: tier_name,
         tier_multiplier: tier_multiplier,
         cert_type_name: cert_type_name,
-        cert_type_code,
-        cert_type_code,
+        cert_type_code: cert_type_code,
         cert_type_rate: cert_type_rate
       }
 
