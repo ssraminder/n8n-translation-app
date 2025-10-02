@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
     if (error) {
       return NextResponse.json({ error: 'DB_ERROR', details: error.message }, { status: 500 })
     }
+    persistedStep3Data = true
   }
 
   // Fire webhook only when step 3 fields are present
@@ -90,9 +91,9 @@ export async function POST(req: NextRequest) {
     (country && country.trim()) ||
     (country_code && country_code.trim())
   )
+  let persistedStep3Data = false
   if (hasStep3) {
     const env = { STEP3: process.env.N8N_STEP3_WEBHOOK_URL, PRIMARY: process.env.N8N_WEBHOOK_URL }
-    const webhook = undefined as any
     {
       // Compute tier/multiplier from languages (+ flexible columns) and tiers
       let tier_name: string | null = null
@@ -211,8 +212,46 @@ export async function POST(req: NextRequest) {
         if (tier_multiplier != null) subUpdates.language_tier_multiplier = tier_multiplier
         if (cert_type_name != null) subUpdates.cert_type_name = cert_type_name
         if (cert_type_rate != null) subUpdates.cert_type_amount = cert_type_rate
-        if (Object.keys(subUpdates).length) await supabase.from('quote_submissions').update(subUpdates).eq('quote_id', quote_id)
+        if (Object.keys(subUpdates).length) {
+          await supabase.from('quote_submissions').update(subUpdates).eq('quote_id', quote_id)
+          persistedStep3Data = true
+        }
       } catch (_) {}
+
+      if (env.STEP3 && persistedStep3Data) {
+        const step3Payload = {
+          event: 'quote_step3_updated',
+          quote_id,
+          job_id: jobIdFromQuote(quote_id),
+          base_rate: baseRate,
+          inputs: {
+            source_lang: source_lang || null,
+            target_lang: target_lang || null,
+            intended_use: intended_use || null,
+            intended_use_id: typeof intended_use_id === 'number' ? intended_use_id : null,
+            source_code: source_code || null,
+            target_code: target_code || null,
+            country: country || null,
+            country_code: country_code || null
+          },
+          resolved: {
+            tier_name,
+            tier_multiplier,
+            cert_type_name,
+            cert_type_code,
+            cert_type_rate
+          }
+        }
+        try {
+          await fetch(env.STEP3, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(step3Payload)
+          })
+        } catch (err) {
+          console.error('STEP3_WEBHOOK_FAILED', err)
+        }
+      }
 
       // Update quote_files metadata with selected fields (best-effort)
       try {
