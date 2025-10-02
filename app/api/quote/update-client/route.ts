@@ -11,7 +11,7 @@ function jobIdFromQuote(id: string) {
 export async function POST(req: NextRequest) {
   const payload = await req.json()
   const { quote_id, client_name, client_email, phone } = payload || {}
-  if (!quote_id || !client_name || !client_email) {
+  if (!quote_id) {
     return NextResponse.json({ error: 'INVALID' }, { status: 400 })
   }
 
@@ -53,7 +53,13 @@ export async function POST(req: NextRequest) {
   const country: string | undefined = typeof payload?.country === 'string' ? payload.country : undefined
   const country_code: string | undefined = typeof payload?.country_code === 'string' ? payload.country_code : undefined
 
-  const update: Record<string, any> = { status: 'submitted', name: client_name, email: client_email, client_email }
+  const update: Record<string, any> = {}
+  if (typeof client_name === 'string' && client_name && typeof client_email === 'string' && client_email) {
+    update.status = 'submitted'
+    update.name = client_name
+    update.email = client_email
+    update.client_email = client_email
+  }
   if (typeof phone === 'string' && phone) update.phone = phone
   if (source_lang) update.source_lang = source_lang
   if (target_lang) update.target_lang = target_lang
@@ -61,12 +67,14 @@ export async function POST(req: NextRequest) {
   if (typeof country === 'string' && country) update.country_of_issue = country
   // Note: we intentionally do not write intended_use_id/source_code/target_code/country_code to DB to avoid schema mismatches
 
-  const { error } = await supabase
-    .from('quote_submissions')
-    .update(update)
-    .eq('quote_id', quote_id)
-  if (error) {
-    return NextResponse.json({ error: 'DB_ERROR', details: error.message }, { status: 500 })
+  if (Object.keys(update).length) {
+    const { error } = await supabase
+      .from('quote_submissions')
+      .update(update)
+      .eq('quote_id', quote_id)
+    if (error) {
+      return NextResponse.json({ error: 'DB_ERROR', details: error.message }, { status: 500 })
+    }
   }
 
   // Fire webhook only when step 3 fields are present
