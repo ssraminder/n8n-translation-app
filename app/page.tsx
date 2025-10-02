@@ -259,6 +259,14 @@ export default function QuoteFlowPage() {
                 })
                 if (!submitRes.ok) throw new Error('UPDATE_CLIENT_FAILED')
                 setProcessingOpen(false)
+                try {
+                  const dbg = await fetch(`/api/quote/debug-suborders?quote_id=${encodeURIComponent(quoteId)}`)
+                  if (dbg.ok) {
+                    const data = await dbg.json()
+                    ;(window as any).__SUBORDER_DEBUG__ = data
+                    setDebugInfo(data)
+                  }
+                } catch {}
                 // Stay on Step 3 while background poll (from Step 2) navigates when ready
               } catch (e) {
                 console.error(e)
