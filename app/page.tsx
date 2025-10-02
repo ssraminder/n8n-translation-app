@@ -255,6 +255,24 @@ export default function QuoteFlowPage() {
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Preparing Your Quote</h2>
               <p className="text-gray-600">We’re finalizing your quote. This usually takes under 30 seconds.</p>
             </div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 md:p-8 max-w-2xl mx-auto">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="h-10 w-10 rounded-full border-4 border-gray-200 border-t-blue-600 animate-spin" aria-label="Loading" />
+                <div>
+                  <p className="text-gray-900 font-medium">Analyzing and pricing your documents…</p>
+                  <p className="text-gray-500 text-sm">This step runs automatically. You’ll be taken to your quote when it’s ready.</p>
+                </div>
+              </div>
+              <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-600 w-1/3 animate-pulse rounded-full" style={{ animationDuration: '1.5s' }} />
+              </div>
+              <ul className="mt-6 space-y-2 text-sm text-gray-600 list-disc list-inside">
+                <li>Counting billable pages</li>
+                <li>Applying language and certification rules</li>
+                <li>Calculating line items and totals</li>
+              </ul>
+              <p className="mt-6 text-gray-500 text-sm">If this takes longer than expected, we’ll route you to a human review and follow up via email.</p>
+            </div>
           </div>
         )}
 
