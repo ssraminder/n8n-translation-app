@@ -311,6 +311,7 @@ export default function QuoteFlowPage() {
                   step2RequestActive.current = false
                   setStep2Saving(false)
                 }
+                setStep2Error(null)
                 setStep(3)
                 startBackgroundPolling()
               }}
