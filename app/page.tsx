@@ -27,6 +27,21 @@ export default function QuoteFlowPage() {
   const [quoteId, setQuoteId] = useState<string | null>(null)
   const [debugInfo, setDebugInfo] = useState<any | null>(null)
 
+  useEffect(() => {
+    if (step === 4 && quoteId) {
+      (async () => {
+        try {
+          const dbg = await fetch(`/api/quote/debug-suborders?quote_id=${encodeURIComponent(quoteId)}`)
+          if (dbg.ok) {
+            const data = await dbg.json()
+            ;(window as any).__SUBORDER_DEBUG__ = data
+            setDebugInfo(data)
+          }
+        } catch {}
+      })()
+    }
+  }, [step, quoteId])
+
   const quote: QuoteDetails = useMemo(()=> ({
     price: 89.95,
     quoteId: '#TQ-2024-001234',
