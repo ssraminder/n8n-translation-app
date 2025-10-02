@@ -14,7 +14,7 @@ import { ConfirmationPage } from '@/components/ConfirmationPage'
 import { DocumentTypeSelect } from '@/components/DocumentTypeSelect'
 import { ReferenceModal } from '@/components/ReferenceModal'
 
-const ACCEPT = '.pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx,.xls,.xlsx'
+const ACCEPT = '.pdf,.jpg,.jpeg,.png,.doc,.docx'
 
 export default function QuoteFlowPage() {
   const router = useRouter()
