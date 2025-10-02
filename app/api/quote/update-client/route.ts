@@ -294,14 +294,14 @@ export async function POST(req: NextRequest) {
       try {
         const { data: rows } = await supabase
           .from('quote_sub_orders')
-          .select('id,billable_pages,language_tier_multiplier')
+          .select('id,billable_pages,language_tier_multiplier,language_multiplier')
           .eq('quote_id', quote_id)
         if (Array.isArray(rows) && rows.length) {
           function roundUpTo(value: number, step: number) { return step > 0 ? Math.ceil(value / step) * step : value }
           const certAmt = typeof cert_type_rate === 'number' ? cert_type_rate : 0
           const updates = rows.map((r: any) => {
             const pages = typeof r.billable_pages === 'number' ? r.billable_pages : 0
-            const tierMult = typeof r.language_tier_multiplier === 'number' ? r.language_tier_multiplier : (tier_multiplier ?? 1)
+            const tierMult = typeof r.language_multiplier === 'number' ? r.language_multiplier : (typeof r.language_tier_multiplier === 'number' ? r.language_tier_multiplier : (tier_multiplier ?? 1))
             const unit = roundUpTo(baseRate * (tierMult || 1), 2.5)
             const amtPages = Number((pages * unit).toFixed(2))
             const lineTotal = Number((amtPages + certAmt).toFixed(2))
