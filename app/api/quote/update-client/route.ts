@@ -204,10 +204,10 @@ export async function POST(req: NextRequest) {
 
   const finalUpdate: Record<string, any> = {
     status: finalStatus ?? null,
-    name: finalName ?? null,
-    email: finalEmail ?? null,
-    client_email: finalEmail ?? null,
-    phone: finalPhone ?? null,
+    // Only include name/email if provided; avoid overwriting to null
+    ...(typeof client_name === 'string' && client_name.trim() ? { name: client_name.trim() } : {}),
+    ...(typeof client_email === 'string' && client_email.trim() ? { email: client_email.trim(), client_email: client_email.trim() } : {}),
+    ...(typeof phone === 'string' && phone.trim() ? { phone: phone.trim() } : {}),
     source_lang: finalSourceLang ?? null,
     target_lang: finalTargetLang ?? null,
     intended_use: finalIntendedUse ?? null,
@@ -230,7 +230,8 @@ export async function POST(req: NextRequest) {
 
   let persistedStep3Data = false
   const allowedKeys = existingRow ? Object.keys(existingRow) : []
-  const filteredUpdate = Object.fromEntries(Object.entries(finalUpdate).filter(([k]) => allowedKeys.includes(k)))
+  const noNulls = Object.fromEntries(Object.entries(finalUpdate).filter(([_, v]) => v !== null && v !== undefined))
+  const filteredUpdate = Object.fromEntries(Object.entries(noNulls).filter(([k]) => allowedKeys.includes(k)))
   const { error: updateError } = await supabase.from('quote_submissions').update(filteredUpdate).eq('quote_id', quote_id)
   if (updateError) {
     return NextResponse.json({ error: 'DB_ERROR', details: updateError.message }, { status: 500 })
