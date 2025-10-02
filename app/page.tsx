@@ -47,6 +47,111 @@ export default function QuoteFlowPage() {
     }
   }, [step, quoteId])
 
+  const step2TargetFilled = useMemo(() => {
+    if (langs.target === 'Other') return Boolean((langs.targetOther || '').trim())
+    return Boolean((langs.target || '').trim())
+  }, [langs.target, langs.targetOther])
+
+  const step2Required = useMemo(() => Boolean(
+    quoteId && (langs.source || '').trim() && step2TargetFilled && (langs.purpose || '').trim() && (langs.country_code || '').trim()
+  ), [quoteId, langs.source, step2TargetFilled, langs.purpose, langs.country_code])
+
+  const step2Payload = useMemo(() => {
+    if (!quoteId || !step2Required) return null
+    const targetText = langs.target === 'Other' ? (langs.targetOther || '').trim() : (langs.target || '').trim()
+    const payload: Record<string, any> = {
+      quote_id: quoteId,
+      source_lang: (langs.source || '').trim(),
+      target_lang: targetText,
+      intended_use_id: langs.intended_use_id,
+      intended_use: langs.purpose,
+      source_code: langs.source_code,
+      target_code: langs.target_code,
+      country: langs.country,
+      country_code: langs.country_code,
+    }
+    if (details.fullName) payload.client_name = details.fullName
+    if (details.email) payload.client_email = details.email
+    if (details.phone) payload.phone = details.phone
+    return payload
+  }, [quoteId, step2Required, langs, details])
+
+  const step2PayloadKey = useMemo(() => (step2Payload ? JSON.stringify(step2Payload) : null), [step2Payload])
+
+  const callUpdateClient = useCallback(async (payload: Record<string, any>, options: { showOverlay?: boolean; suppressAlert?: boolean } = {}) => {
+    const { showOverlay = false, suppressAlert = false } = options
+    try {
+      if (showOverlay) {
+        setOverlayMode('process')
+        setProcessingOpen(true)
+      }
+      const res = await fetch('/api/quote/update-client', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      if (!res.ok) throw new Error('UPDATE_FAILED')
+      if (showOverlay) setProcessingOpen(false)
+      return true
+    } catch (error) {
+      if (showOverlay) {
+        setProcessingOpen(false)
+        if (!suppressAlert) alert('There was a problem saving your selections. Please try again.')
+      }
+      throw error
+    }
+  }, [setOverlayMode, setProcessingOpen])
+
+  const startBackgroundPolling = useCallback(() => {
+    if (!quoteId || pollingStarted) return
+    setPollingStarted(true)
+    ;(async () => {
+      const timeoutMs = 45000
+      const intervalMs = 5000
+      const startTime = Date.now()
+      for (;;) {
+        try {
+          const st = await fetch(`/api/quote/status/${quoteId}`)
+          if (st.ok) {
+            const { n8n_status, stage } = await st.json()
+            if (n8n_status === 'ready' || stage === 'ready' || stage === 'calculated') {
+              router.push(`/quote/${quoteId}`)
+              break
+            }
+          }
+        } catch {}
+        if (Date.now() - startTime >= timeoutMs) {
+          await fetch('/api/quote/request-hitl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quote_id: quoteId }) })
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, intervalMs))
+      }
+    })()
+  }, [pollingStarted, quoteId, router])
+
+  useEffect(() => {
+    if (step !== 2) return
+    if (!step2Payload || !step2PayloadKey) {
+      setStep2Error(null)
+      return
+    }
+    if (step2SavedKey === step2PayloadKey || step2RequestActive.current) return
+    step2RequestActive.current = true
+    setStep2Saving(true)
+    setStep2Error(null)
+    ;(async () => {
+      try {
+        await callUpdateClient(step2Payload, { suppressAlert: true })
+        setStep2SavedKey(step2PayloadKey)
+        setStep2Error(null)
+      } catch {
+        setStep2Error('Unable to save selections automatically. Please click Continue.')
+      } finally {
+        step2RequestActive.current = false
+        setStep2Saving(false)
+      }
+    })()
+  }, [step, step2Payload, step2PayloadKey, step2SavedKey, callUpdateClient])
+
   const quote: QuoteDetails = useMemo(()=> ({
     price: 89.95,
     quoteId: '#TQ-2024-001234',
