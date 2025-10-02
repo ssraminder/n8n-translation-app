@@ -106,41 +106,43 @@ export async function GET(req: NextRequest) {
     if (typeof intended_use_id === 'number') {
       const { data: mapRow } = await supabase
         .from('intended_use_cert_map')
-        .select('cert_type_id')
+        .select('cert_type_id,cert_type_code')
         .eq('intended_use_id', intended_use_id)
         .maybeSingle()
       if (mapRow && typeof (mapRow as any).cert_type_code === 'string' && (mapRow as any).cert_type_code.trim()) {
         cert_type_code = ((mapRow as any).cert_type_code as string).trim()
       }
-      const certTypeId: number | string | null = mapRow ? ((mapRow as any).cert_type_id ?? (mapRow as any).cert_type ?? null) : null
-      if (certTypeId !== null) {
-        if (typeof certTypeId === 'number') {
-          const { data: cert } = await supabase
-            .from('cert_types')
-            .select('id,name,pricing_type,amount')
-            .eq('id', certTypeId)
-            .maybeSingle()
-          if (cert) {
-            cert_type_name = (cert as any).name ?? cert_type_name
-            if ((cert as any).code) {
-              const codeVal = String((cert as any).code).trim()
-              if (codeVal) cert_type_code = codeVal
-            }
-            cert_type_rate = typeof (cert as any).rate === 'number' ? (cert as any).rate : (typeof (cert as any).amount === 'number' ? (cert as any).amount : (typeof (cert as any).multiplier === 'number' ? (cert as any).multiplier : null))
+      const rawCertTypeId = mapRow ? ((mapRow as any).cert_type_id ?? (mapRow as any).cert_type ?? null) : null
+      if (rawCertTypeId !== null) {
+        const lookupColumn = typeof rawCertTypeId === 'number' ? 'id' : 'name'
+        const lookupValue = typeof rawCertTypeId === 'number' ? rawCertTypeId : String(rawCertTypeId)
+        const { data: cert } = await supabase
+          .from('cert_types')
+          .select('id,name,code,pricing_type,amount')
+          .eq(lookupColumn, lookupValue)
+          .maybeSingle()
+        if (cert) {
+          if ((cert as any).name) {
+            cert_type_name = String((cert as any).name)
           }
-        } else {
-          const { data: cert } = await supabase
-            .from('cert_types')
-            .select('id,name,pricing_type,amount')
-            .eq('name', String(certTypeId))
-            .maybeSingle()
-          if (cert) {
-            cert_type_name = (cert as any).name ?? cert_type_name
-            if ((cert as any).code) {
-              const codeVal = String((cert as any).code).trim()
-              if (codeVal) cert_type_code = codeVal
+          if ((cert as any).code) {
+            const codeVal = String((cert as any).code).trim()
+            if (codeVal) cert_type_code = codeVal
+          }
+          const rawAmount = (cert as any).amount
+          if (typeof rawAmount === 'number') {
+            cert_type_rate = rawAmount
+          } else if (typeof rawAmount === 'string' && rawAmount.trim()) {
+            const parsed = Number(rawAmount)
+            if (Number.isFinite(parsed)) cert_type_rate = parsed
+          }
+          if (cert_type_rate === null || cert_type_rate === undefined) {
+            const rawRate = (cert as any).rate
+            if (typeof rawRate === 'number') cert_type_rate = rawRate
+            if (cert_type_rate === null || cert_type_rate === undefined) {
+              const rawMultiplier = (cert as any).multiplier
+              if (typeof rawMultiplier === 'number') cert_type_rate = rawMultiplier
             }
-            cert_type_rate = typeof (cert as any).rate === 'number' ? (cert as any).rate : (typeof (cert as any).amount === 'number' ? (cert as any).amount : (typeof (cert as any).multiplier === 'number' ? (cert as any).multiplier : null))
           }
         }
       }
@@ -163,8 +165,16 @@ export async function GET(req: NextRequest) {
         certByName = data as any
       }
       if (certByName) {
-        cert_type_name = (certByName as any).name ?? cert_type_name
-        cert_type_rate = typeof (certByName as any).amount === 'number' ? (certByName as any).amount : cert_type_rate
+        if ((certByName as any).name) {
+          cert_type_name = String((certByName as any).name)
+        }
+        const fallbackAmount = (certByName as any).amount
+        if (typeof fallbackAmount === 'number') {
+          cert_type_rate = fallbackAmount
+        } else if (typeof fallbackAmount === 'string' && fallbackAmount.trim()) {
+          const parsed = Number(fallbackAmount)
+          if (Number.isFinite(parsed)) cert_type_rate = parsed
+        }
       }
     }
     if (!cert_type_name && typeof intended_use_id === 'number') {
@@ -172,7 +182,10 @@ export async function GET(req: NextRequest) {
       if (iu) {
         cert_type_name = (iu as any).certification_type || cert_type_name
         const price = (iu as any).certification_price
-        if (price !== null && price !== undefined) cert_type_rate = Number(price)
+        if (price !== null && price !== undefined) {
+          const parsed = Number(price)
+          if (Number.isFinite(parsed)) cert_type_rate = parsed
+        }
       }
     }
   } catch {}
