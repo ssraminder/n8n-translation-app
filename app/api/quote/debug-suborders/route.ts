@@ -93,11 +93,25 @@ export async function GET(req: NextRequest) {
   let tier_name: string | null = null
   let tier_multiplier: number | null = null
   try {
-    let tierRow = await resolveLangTierFlexible(source_code, source_lang)
-    if (!tierRow) tierRow = await resolveLangTierFlexible(target_code, target_lang)
-    if (tierRow) {
-      tier_name = (tierRow as any).name ?? tier_name
-      tier_multiplier = typeof (tierRow as any).multiplier === 'number' ? (tierRow as any).multiplier : tier_multiplier
+    const src = await resolveLangTierFlexible(source_code, source_lang)
+    const tgt = await resolveLangTierFlexible(target_code, target_lang)
+    const cand: { name: string | null; multiplier: number | null }[] = []
+    if (src) cand.push({ name: (src as any).name ?? null, multiplier: typeof (src as any).multiplier === 'number' ? (src as any).multiplier : null })
+    if (tgt) cand.push({ name: (tgt as any).name ?? null, multiplier: typeof (tgt as any).multiplier === 'number' ? (tgt as any).multiplier : null })
+    if (cand.length) {
+      let chosen = cand[0]
+      for (const c of cand.slice(1)) {
+        const m0 = Number(chosen.multiplier ?? 0)
+        const m1 = Number(c.multiplier ?? 0)
+        if (m1 > m0) chosen = c
+      }
+      if (cand.length === 2 && (cand[0].multiplier === cand[1].multiplier) && cand[0].name && cand[0].name === cand[1].name) {
+        tier_name = cand[0].name
+        tier_multiplier = cand[0].multiplier
+      } else {
+        tier_name = chosen.name
+        tier_multiplier = chosen.multiplier
+      }
     }
   } catch {}
 
@@ -107,8 +121,8 @@ export async function GET(req: NextRequest) {
   try {
     if (typeof intended_use_id === 'number') {
       const { data: mapRow } = await supabase
-        .from('certification_map')
-        .select('*')
+        .from('intended_use_cert_map')
+        .select('cert_type_id')
         .eq('intended_use_id', intended_use_id)
         .maybeSingle()
       if (mapRow && typeof (mapRow as any).cert_type_code === 'string' && (mapRow as any).cert_type_code.trim()) {
@@ -118,8 +132,8 @@ export async function GET(req: NextRequest) {
       if (certTypeId !== null) {
         if (typeof certTypeId === 'number') {
           const { data: cert } = await supabase
-            .from('certification_types')
-            .select('id,name,code,amount,pricing_type,multiplier,rate')
+            .from('cert_types')
+            .select('id,name,pricing_type,amount')
             .eq('id', certTypeId)
             .maybeSingle()
           if (cert) {
@@ -132,8 +146,8 @@ export async function GET(req: NextRequest) {
           }
         } else {
           const { data: cert } = await supabase
-            .from('certification_types')
-            .select('id,name,code,amount,pricing_type,multiplier,rate')
+            .from('cert_types')
+            .select('id,name,pricing_type,amount')
             .eq('name', String(certTypeId))
             .maybeSingle()
           if (cert) {
@@ -150,15 +164,15 @@ export async function GET(req: NextRequest) {
     if (!cert_type_name && typeof intended_use === 'string' && intended_use.trim()) {
       const term = intended_use.trim()
       let { data: certByName } = await supabase
-        .from('certification_types')
-        .select('id,name,code,amount,pricing_type,multiplier,rate')
+        .from('cert_types')
+        .select('id,name,pricing_type,amount')
         .ilike('name', term)
         .maybeSingle()
       if (!certByName) {
         const like = term.includes('cert') ? '%cert%' : `%${term}%`
         const { data } = await supabase
-          .from('certification_types')
-          .select('id,name,code,amount,pricing_type,multiplier,rate')
+          .from('cert_types')
+          .select('id,name,pricing_type,amount')
           .ilike('name', like)
           .limit(1)
           .maybeSingle()
@@ -166,11 +180,7 @@ export async function GET(req: NextRequest) {
       }
       if (certByName) {
         cert_type_name = (certByName as any).name ?? cert_type_name
-        if ((certByName as any).code) {
-          const codeVal = String((certByName as any).code).trim()
-          if (codeVal) cert_type_code = codeVal
-        }
-        cert_type_rate = typeof (certByName as any).rate === 'number' ? (certByName as any).rate : (typeof (certByName as any).amount === 'number' ? (certByName as any).amount : (typeof (certByName as any).multiplier === 'number' ? (certByName as any).multiplier : null))
+        cert_type_rate = typeof (certByName as any).amount === 'number' ? (certByName as any).amount : cert_type_rate
       }
     }
   } catch {}
