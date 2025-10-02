@@ -50,15 +50,22 @@ export async function POST(req: NextRequest) {
     }
   } catch (_) {}
 
-  // Optional: create or find customer by email
+  // Optional: create or find customer by email (only if provided)
   let customer_id: string | null = null
   try {
-    const { data: existing } = await supabase.from('customers').select('id').eq('email', client_email).maybeSingle()
-    if (existing?.id) {
-      customer_id = existing.id as any
-    } else {
-      const { data: created } = await supabase.from('customers').insert({ name: client_name, email: client_email, phone: phone || null }).select('id').single()
-      customer_id = (created as any)?.id || null
+    const email = typeof client_email === 'string' ? client_email.trim() : ''
+    if (email) {
+      const { data: existing } = await supabase.from('customers').select('id').eq('email', email).maybeSingle()
+      if (existing?.id) {
+        customer_id = existing.id as any
+      } else {
+        const { data: created } = await supabase
+          .from('customers')
+          .insert({ name: client_name || null, email, phone: phone || null })
+          .select('id')
+          .single()
+        customer_id = (created as any)?.id || null
+      }
     }
   } catch (_) {
     customer_id = null
