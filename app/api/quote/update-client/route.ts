@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
       try {
         if (typeof intended_use_id === 'number') {
           const { data: mapRow } = await supabase
-            .from('intended_use_cert_map')
+            .from('certification_map')
             .select('*')
             .eq('intended_use_id', intended_use_id)
             .maybeSingle()
@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
           if (certTypeId !== null) {
             if (typeof certTypeId === 'number') {
               const { data: cert } = await supabase
-                .from('cert_types')
+                .from('certification_types')
                 .select('id,name,code,amount,pricing_type,multiplier,rate')
                 .eq('id', certTypeId)
                 .maybeSingle()
@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
               }
             } else {
               const { data: cert } = await supabase
-                .from('cert_types')
+                .from('certification_types')
                 .select('id,name,code,amount,pricing_type,multiplier,rate')
                 .eq('name', String(certTypeId))
                 .maybeSingle()
@@ -188,14 +188,14 @@ export async function POST(req: NextRequest) {
         if (!cert_type_name && typeof intended_use === 'string' && intended_use.trim()) {
           const term = intended_use.trim()
           let { data: certByName } = await supabase
-            .from('cert_types')
+            .from('certification_types')
             .select('id,name,code,amount,pricing_type,multiplier,rate')
             .ilike('name', term)
             .maybeSingle()
           if (!certByName) {
             const like = term.includes('cert') ? '%cert%' : `%${term}%`
             const { data } = await supabase
-              .from('cert_types')
+              .from('certification_types')
               .select('id,name,code,amount,pricing_type,multiplier,rate')
               .ilike('name', like)
               .limit(1)
@@ -235,7 +235,7 @@ export async function POST(req: NextRequest) {
           if ((cert_type_name == null || cert_type_rate == null) && typeof intended_use === 'string' && intended_use.trim()) {
             const term = intended_use.trim()
             const { data: cert } = await supabase
-              .from('cert_types')
+              .from('certification_types')
               .select('id,name,code,amount,pricing_type,multiplier,rate')
               .ilike('name', `%${term}%`)
               .limit(1)
@@ -284,26 +284,21 @@ export async function POST(req: NextRequest) {
       } catch (_) {}
 
       try {
-        const { data: res } = await supabase.from('quote_results').select('results_json').eq('quote_id', quote_id).maybeSingle()
-        const documents: any[] = (res as any)?.results_json?.documents || []
-        if (Array.isArray(documents) && documents.length) {
-          await supabase.from('quote_sub_orders').delete().eq('quote_id', quote_id)
+        const { data: rows } = await supabase
+          .from('quote_sub_orders')
+          .select('id,billable_pages,language_tier_multiplier')
+          .eq('quote_id', quote_id)
+        if (Array.isArray(rows) && rows.length) {
           function roundUpTo(value: number, step: number) { return step > 0 ? Math.ceil(value / step) * step : value }
           const certAmt = typeof cert_type_rate === 'number' ? cert_type_rate : 0
-          const rows = documents.map((d: any) => {
-            const label = d.document_type || d.filename || d.label || 'document'
-            const pages = typeof d.pages === 'number' ? d.pages : (typeof d.billable_pages === 'number' ? d.billable_pages : 0)
-            const docMult = typeof d.language_multiplier === 'number' ? d.language_multiplier : null
-            const tierMult = docMult != null ? docMult : (tier_multiplier ?? 1)
-            const baseTimesTier = baseRate * (tierMult || 1)
-            const unit = roundUpTo(baseTimesTier, 2.5)
+          const updates = rows.map((r: any) => {
+            const pages = typeof r.billable_pages === 'number' ? r.billable_pages : 0
+            const tierMult = typeof r.language_tier_multiplier === 'number' ? r.language_tier_multiplier : (tier_multiplier ?? 1)
+            const unit = roundUpTo(baseRate * (tierMult || 1), 2.5)
             const amtPages = Number((pages * unit).toFixed(2))
             const lineTotal = Number((amtPages + certAmt).toFixed(2))
             return {
-              quote_id,
-              document_label: label,
-              billable_pages: Number(pages.toFixed(2)),
-              language_tier_multiplier: Number((tierMult || 1).toFixed(3)),
+              id: r.id,
               unit_rate: Number(unit.toFixed(2)),
               amount_pages: amtPages,
               certification_type_code: cert_type_code || null,
@@ -312,7 +307,7 @@ export async function POST(req: NextRequest) {
               line_total: lineTotal,
             }
           })
-          if (rows.length) await supabase.from('quote_sub_orders').insert(rows)
+          if (updates.length) await supabase.from('quote_sub_orders').upsert(updates, { onConflict: 'id' })
         }
       } catch (_) {}
     }
