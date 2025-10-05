@@ -24,6 +24,10 @@ export function getEnv() {
 }
 
 export const ALLOWED_FILE_TYPES = new Set([
-  'application/pdf','image/jpeg','image/png','image/tiff','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ])
-export const ALLOWED_EXTENSIONS = new Set(['.pdf','.jpg','.jpeg','.png','.tif','.tiff','.doc','.docx','.xls','.xlsx'])
+export const ALLOWED_EXTENSIONS = new Set(['.pdf','.jpg','.jpeg','.png','.doc','.docx'])
