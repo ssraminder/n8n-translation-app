@@ -99,8 +99,8 @@ export async function POST(req: NextRequest) {
 
   const rows: any[] = []
 
-  const imageEntries = (files as { path: string; contentType?: string; filename?: string; bytes?: number }[]).filter(f => /image\/(png|jpe?g|tiff)/i.test(f.contentType || ''))
-  const nonImageEntries = (files as { path: string; contentType?: string; filename?: string; bytes?: number }[]).filter(f => !/image\/(png|jpe?g|tiff)/i.test(f.contentType || ''))
+  const imageEntries = (files as { path: string; contentType?: string; filename?: string; bytes?: number }[]).filter(f => /image\/(png|jpe?g)/i.test(f.contentType || ''))
+  const nonImageEntries = (files as { path: string; contentType?: string; filename?: string; bytes?: number }[]).filter(f => !/image\/(png|jpe?g)/i.test(f.contentType || ''))
 
   // Insert non-image files as-is
   for (const f of nonImageEntries) {

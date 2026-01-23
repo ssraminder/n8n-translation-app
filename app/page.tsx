@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ProgressBar, StepIndex } from '@/components/ProgressBar'
 import { FileUploadArea } from '@/components/FileUploadArea'
@@ -14,7 +14,7 @@ import { ConfirmationPage } from '@/components/ConfirmationPage'
 import { DocumentTypeSelect } from '@/components/DocumentTypeSelect'
 import { ReferenceModal } from '@/components/ReferenceModal'
 
-const ACCEPT = '.pdf,.jpg,.jpeg,.png,.tif,.tiff,.doc,.docx,.xls,.xlsx'
+const ACCEPT = '.pdf,.jpg,.jpeg,.png,.doc,.docx'
 
 export default function QuoteFlowPage() {
   const router = useRouter()
@@ -25,6 +25,84 @@ export default function QuoteFlowPage() {
   const [processingOpen, setProcessingOpen] = useState(false)
   const [overlayMode, setOverlayMode] = useState<'upload' | 'process'>('process')
   const [quoteId, setQuoteId] = useState<string | null>(null)
+  const [jobId, setJobId] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<any | null>(null)
+
+  useEffect(() => {
+    if (step === 4 && quoteId) {
+      (async () => {
+        try {
+          const dbg = await fetch(`/api/quote/debug-suborders?quote_id=${encodeURIComponent(quoteId)}`)
+          if (dbg.ok) {
+            const data = await dbg.json()
+            ;(window as any).__SUBORDER_DEBUG__ = data
+            setDebugInfo(data)
+          }
+        } catch {}
+      })()
+    }
+  }, [step, quoteId])
+
+  const step2TargetFilled = useMemo(() => {
+    if (langs.target === 'Other') return Boolean((langs.targetOther || '').trim())
+    return Boolean((langs.target || '').trim())
+  }, [langs.target, langs.targetOther])
+
+  const step2Required = useMemo(() => Boolean(
+    quoteId && (langs.source || '').trim() && step2TargetFilled && (langs.purpose || '').trim() && (langs.country_code || '').trim()
+  ), [quoteId, langs.source, step2TargetFilled, langs.purpose, langs.country_code])
+
+  const step2Payload = useMemo(() => {
+    if (!quoteId || !step2Required) return null
+    const targetText = langs.target === 'Other' ? (langs.targetOther || '').trim() : (langs.target || '').trim()
+    const payload: Record<string, any> = {
+      quote_id: quoteId,
+      source_lang: (langs.source || '').trim(),
+      target_lang: targetText,
+      intended_use_id: langs.intended_use_id,
+      intended_use: langs.purpose,
+      source_code: langs.source_code,
+      target_code: langs.target_code,
+      country: langs.country,
+      country_code: langs.country_code,
+    }
+    if (details.fullName) payload.client_name = details.fullName
+    if (details.email) payload.client_email = details.email
+    if (details.phone) payload.phone = details.phone
+    return payload
+  }, [quoteId, step2Required, langs, details])
+
+  const step2PayloadKey = useMemo(() => (step2Payload ? JSON.stringify(step2Payload) : null), [step2Payload])
+
+  const callUpdateClient = useCallback(async (payload: Record<string, any>, options: { showOverlay?: boolean; suppressAlert?: boolean } = {}) => {
+    const { showOverlay = false, suppressAlert = false } = options
+    try {
+      if (showOverlay) {
+        setOverlayMode('process')
+        setProcessingOpen(true)
+      }
+      const res = await fetch('/api/quote/update-client', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      if (!res.ok) {
+        let info = ''
+        try { const j = await res.json(); info = j?.details || j?.error || JSON.stringify(j) } catch { try { info = await res.text() } catch {} }
+        const code = `HTTP_${res.status}`
+        throw new Error(`${code}: ${info}`)
+      }
+      if (showOverlay) setProcessingOpen(false)
+      return true
+    } catch (error) {
+      if (showOverlay) {
+        setProcessingOpen(false)
+        if (!suppressAlert) alert('There was a problem saving your selections. Please try again.')
+      }
+      throw error
+    }
+  }, [setOverlayMode, setProcessingOpen])
+
+
 
   const quote: QuoteDetails = useMemo(()=> ({
     price: 89.95,
@@ -86,6 +164,7 @@ export default function QuoteFlowPage() {
         const json = await createRes.json()
         if (!json?.quote_id || typeof json.quote_id !== 'string') throw new Error('CREATE_NO_ID')
         quote_id = json.quote_id
+        if (json?.job_id) setJobId(String(json.job_id))
       }
       const uploaded: { path: string; contentType: string; filename: string; bytes: number }[] = []
       const idempotency_key = newId()
@@ -105,6 +184,7 @@ export default function QuoteFlowPage() {
       const filesJson = await filesRes.json()
       setQuoteId(quote_id)
       setProcessingOpen(false)
+      setDebugInfo(null)
       if (filesJson?.webhook === 'failed') {
         alert('Your files were saved, but processing was not triggered yet. We will retry shortly.')
       }
@@ -116,26 +196,6 @@ export default function QuoteFlowPage() {
     }
   }
 
-
-  async function runQuoteFlow() {
-    if (!quoteId) { alert('Please start by uploading files in Step 1.'); setStep(1); return }
-    if (!details.fullName || !details.email) { alert('Please enter your name and email'); return }
-    setOverlayMode('process')
-    setProcessingOpen(true)
-    try {
-      const submitRes = await fetch('/api/quote/update-client', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ quote_id: quoteId, client_name: details.fullName, client_email: details.email, phone: details.phone })
-      })
-      if (!submitRes.ok) throw new Error('UPDATE_CLIENT_FAILED')
-      setProcessingOpen(false)
-      setStep(3)
-    } catch (e) {
-      console.error(e)
-      setProcessingOpen(false)
-      alert('There was a problem saving your details. Please try again.')
-    }
-  }
 
 
   return (
@@ -172,77 +232,73 @@ export default function QuoteFlowPage() {
         {step === 2 && (
           <div>
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Enter Your Details</h2>
-              <p className="text-gray-600">We need some basic information to process your quote</p>
-            </div>
-            <ClientDetailsForm value={details} onChange={setDetails} onContinue={runQuoteFlow} />
-          </div>
-        )}
-
-        {step === 3 && (
-          <div>
-            <div className="text-center mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Select Languages and Intended Use</h2>
               <p className="text-gray-600">Confirm or adjust your source/target languages and intended use</p>
+              {jobId && <p className="mt-2 text-sm text-gray-500">Job ID: <span className="font-mono">{jobId}</span></p>}
             </div>
             <LanguageSelects value={langs} onChange={setLangs} />
             <button
               className="mt-8 w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
               onClick={async ()=>{
                 if (!quoteId) { alert('Missing quote. Please start again.'); setStep(1); return }
-                if (!langs.source || !(langs.target || langs.targetOther) || !langs.purpose || !langs.country_code) { alert('Please select source, target, intended use, and country of issue.'); return }
-                const targetText = langs.target === 'Other' ? (langs.targetOther || '') : langs.target
+                if (!step2Payload) { alert('Please select source, target, intended use, and country of issue.'); return }
                 try {
-                  setOverlayMode('process')
-                  setProcessingOpen(true)
-                  const res = await fetch('/api/quote/update-client', {
-                    method: 'POST', headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify({
-                      quote_id: quoteId,
-                      client_name: details.fullName,
-                      client_email: details.email,
-                      phone: details.phone,
-                      source_lang: langs.source,
-                      target_lang: targetText,
-                      intended_use_id: langs.intended_use_id,
-                      intended_use: langs.purpose,
-                      source_code: langs.source_code,
-                      target_code: langs.target_code,
-                      country: langs.country,
-                      country_code: langs.country_code
-                    })
-                  })
-                  if (!res.ok) throw new Error('UPDATE_FAILED')
-                  setStep(4)
-
-                  // Wait up to 30s for quote readiness
-                  const start = Date.now()
-                  let ready = false
-                  while (Date.now() - start < 30000) {
-                    await new Promise(r=>setTimeout(r, 2000))
-                    const st = await fetch(`/api/quote/status/${quoteId}`)
-                    if (st.ok) {
-                      const { stage } = await st.json()
-                      if (stage === 'ready' || stage === 'calculated') { ready = true; break }
-                    }
-                  }
-                  if (ready) {
-                    router.push(`/quote/${quoteId}`)
-                  } else {
-                    // Request HITL and inform user
-                    await fetch('/api/quote/request-hitl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ quote_id: quoteId }) })
-                    setProcessingOpen(false)
-                    alert('Your quote is taking longer than expected. A specialist will review it and email you shortly. You can also check your profile later to review your quote.')
-                  }
-                } catch (e) {
+                  await callUpdateClient(step2Payload, { showOverlay: true })
+                } catch (e: any) {
                   console.error(e)
-                  setProcessingOpen(false)
-                  alert('There was a problem saving your selections. Please try again.')
+                  alert(`Unable to save selections. ${e?.message || e}`)
+                  return
                 }
+                setStep(3)
               }}
             >
               Continue
             </button>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div>
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Enter Your Details</h2>
+              <p className="text-gray-600">We need some basic information to process your quote</p>
+            </div>
+            <ClientDetailsForm value={details} onChange={setDetails} onContinue={async ()=>{
+              try {
+                if (!quoteId) { alert('Missing quote. Please start again.'); setStep(1); return }
+                if (!details.fullName || !details.email) { alert('Please enter your name and email'); return }
+                setOverlayMode('process')
+                setProcessingOpen(true)
+                const submitRes = await fetch('/api/quote/update-client', {
+                  method: 'POST', headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({ quote_id: quoteId, client_name: details.fullName, client_email: details.email, phone: details.phone })
+                })
+                if (!submitRes.ok) throw new Error('UPDATE_CLIENT_FAILED')
+                setProcessingOpen(false)
+                try {
+                  const dbg = await fetch(`/api/quote/debug-suborders?quote_id=${encodeURIComponent(quoteId)}`)
+                  if (dbg.ok) {
+                    const data = await dbg.json()
+                    ;(window as any).__SUBORDER_DEBUG__ = data
+                    setDebugInfo(data)
+                  }
+                } catch {}
+                setStep(4)
+              } catch (e) {
+                console.error(e)
+                setProcessingOpen(false)
+                alert('There was a problem saving your details. Please try again.')
+              }
+            }} />
+            {debugInfo && (
+              <div className="mt-8">
+                <div className="text-sm font-semibold text-gray-800 mb-2">Sub-Order Update Debug</div>
+                <div className="bg-gray-50 border border-gray-200 rounded p-4 overflow-auto text-xs text-gray-800">
+                  <pre className="whitespace-pre-wrap break-all">{JSON.stringify(debugInfo, null, 2)}</pre>
+                </div>
+                <p className="mt-2 text-xs text-gray-500">This shows all inputs and computed values that would be used to update quote_sub_orders.</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -252,6 +308,33 @@ export default function QuoteFlowPage() {
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Preparing Your Quote</h2>
               <p className="text-gray-600">We’re finalizing your quote. This usually takes under 30 seconds.</p>
             </div>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 md:p-8 max-w-2xl mx-auto">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="h-10 w-10 rounded-full border-4 border-gray-200 border-t-blue-600 animate-spin" aria-label="Loading" />
+                <div>
+                  <p className="text-gray-900 font-medium">Analyzing and pricing your documents…</p>
+                  <p className="text-gray-500 text-sm">This step runs automatically. You’ll be taken to your quote when it’s ready.</p>
+                </div>
+              </div>
+              <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-600 w-1/3 animate-pulse rounded-full" style={{ animationDuration: '1.5s' }} />
+              </div>
+              <ul className="mt-6 space-y-2 text-sm text-gray-600 list-disc list-inside">
+                <li>Counting billable pages</li>
+                <li>Applying language and certification rules</li>
+                <li>Calculating line items and totals</li>
+              </ul>
+              <p className="mt-6 text-gray-500 text-sm">If this takes longer than expected, we’ll route you to a human review and follow up via email.</p>
+            </div>
+            {debugInfo && (
+              <div className="mt-6 max-w-2xl mx-auto">
+                <div className="text-sm font-semibold text-gray-800 mb-2">Sub-Order Update Debug</div>
+                <div className="bg-gray-50 border border-gray-200 rounded p-4 overflow-auto text-xs text-gray-800">
+                  <pre className="whitespace-pre-wrap break-all">{JSON.stringify(debugInfo, null, 2)}</pre>
+                </div>
+                <p className="mt-2 text-xs text-gray-500">Debug preview of inputs and computed values used to update quote_sub_orders.</p>
+              </div>
+            )}
           </div>
         )}
 
